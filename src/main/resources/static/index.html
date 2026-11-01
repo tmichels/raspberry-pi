@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Raspberry Pi bediening</title>
+    <style>
+        :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+        body { margin: 0; padding: 24px; min-height: 100dvh; box-sizing: border-box; }
+        main { max-width: 480px; margin: 48px auto; }
+        h1 { font-size: 1.8rem; }
+        p { line-height: 1.6; }
+        button { width: 100%; min-height: 56px; padding: 16px; border: 0; border-radius: 12px;
+            background: #2563eb; color: white; font: inherit; font-weight: 600; cursor: pointer; }
+        button:disabled { opacity: .6; cursor: wait; }
+        button:focus-visible { outline: 3px solid #60a5fa; outline-offset: 4px; }
+        #status { min-height: 3em; overflow-wrap: anywhere; white-space: pre-line; }
+        .warning { font-size: .9rem; opacity: .8; }
+    </style>
+</head>
+<body>
+<main>
+    <h1>Raspberry Pi bediening</h1>
+    <p>Voer <code>touch $(date "+%F %T")</code> uit op de Raspberry Pi.</p>
+    <button id="touch" type="button">Bestand aanmaken</button>
+    <p id="status" role="status" aria-live="polite"></p>
+    <p class="warning">Deze POC heeft geen authenticatie. Gebruik hem alleen op een vertrouwd lokaal netwerk.</p>
+</main>
+<script>
+    const button = document.getElementById('touch');
+    const status = document.getElementById('status');
+
+    button.addEventListener('click', async () => {
+        button.disabled = true;
+        status.textContent = 'Commando wordt uitgevoerd...';
+        try {
+            const response = await fetch('/api/commands/touch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: '{}',
+                signal: AbortSignal.timeout(10000)
+            });
+            if (!response.ok) {
+                const problem = await response.json();
+                throw new Error(problem.detail || `Request mislukt (HTTP ${response.status}).`);
+            }
+            const result = await response.json();
+            status.textContent = `${result.exitCode === 0 ? 'Commando uitgevoerd.' : 'Commando mislukt.'}\nExitcode: ${result.exitCode}\nOutput:\n${result.output || '(geen output)'}`;
+        } catch (error) {
+            status.textContent = error.name === 'TimeoutError'
+                ? 'Geen antwoord binnen 10 seconden. Het commando kan al zijn uitgevoerd; controleer de Pi.'
+                : `Mislukt: ${error.message}`;
+        } finally {
+            button.disabled = false;
+        }
+    });
+</script>
+</body>
+</html>
