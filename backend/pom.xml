@@ -10,7 +10,7 @@
         <relativePath/>
     </parent>
     <groupId>nl.pi</groupId>
-    <artifactId>pi-frontend</artifactId>
+    <artifactId>raspberry-pi</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>pi-frontend</name>
     <description>Mobiele webpagina voor vaste Linux-acties op een Raspberry Pi</description>
