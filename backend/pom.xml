@@ -12,8 +12,8 @@
     <groupId>nl.pi</groupId>
     <artifactId>raspberry-pi</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>pi-frontend</name>
-    <description>Mobiele webpagina voor vaste Linux-acties op een Raspberry Pi</description>
+    <name>raspberry-pi-backend</name>
+    <description>HTTP-API voor vaste Linux-acties op een Raspberry Pi</description>
     <properties>
         <java.version>27</java.version>
     </properties>

@@ -1,0 +1,35 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color-scheme: light dark;
+}
+
+body {
+  margin: 0;
+  padding: 24px;
+}
+
+main {
+  max-width: 480px;
+  margin: 48px auto;
+}
+
+p {
+  line-height: 1.6;
+}
+
+button {
+  min-height: 48px;
+  padding: 12px 24px;
+  font: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: wait;
+}
+
+.status {
+  min-height: 3em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

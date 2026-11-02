@@ -11,7 +11,6 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import static org.hamcrest.Matchers.containsString;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -27,30 +26,26 @@ class CommandControllerTest {
     private CommandService commandService;
 
     @Test
-    void servesTheMobilePage() throws Exception {
-        mvc.perform(get("/index.html"))
-                .andExpect(status().isOk())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
-                .andExpect(content().string(containsString("Bestand aanmaken")))
-                .andExpect(content().string(containsString("name=\"viewport\"")));
-        mvc.perform(get("/")).andExpect(status().isOk()).andExpect(forwardedUrl("index.html"));
+    void returnsNotFoundForUnmappedPaths() throws Exception {
+        mvc.perform(get("/index.html")).andExpect(status().isNotFound());
+        mvc.perform(get("/")).andExpect(status().isNotFound());
     }
 
     @Test
     void executesTheActionWithoutAuthentication() throws Exception {
-        when(commandService.execute("touch $(date \"+%F %T\")")).thenReturn(new CommandResult("", 0));
+        when(commandService.execute("touch \"$(date \"+%F %T\")\"")).thenReturn(new CommandResult("", 0));
 
         mvc.perform(post("/api/commands/touch").contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.output").value(""))
                 .andExpect(jsonPath("$.exitCode").value(0));
 
-        verify(commandService).execute("touch $(date \"+%F %T\")");
+        verify(commandService).execute("touch \"$(date \"+%F %T\")\"");
     }
 
     @Test
     void returnsCommandOutputAndNonzeroExitCode() throws Exception {
-        when(commandService.execute("touch $(date \"+%F %T\")"))
+        when(commandService.execute("touch \"$(date \"+%F %T\")\""))
                 .thenReturn(new CommandResult("Permission denied\n", 1));
 
         mvc.perform(post("/api/commands/touch").contentType(MediaType.APPLICATION_JSON).content("{}"))
@@ -62,7 +57,7 @@ class CommandControllerTest {
     @Test
     void returnsAnExplicitErrorWhenTheCommandFails() throws Exception {
         doThrow(new CommandExecutionException("exitcode 1")).when(commandService)
-                .execute("touch $(date \"+%F %T\")");
+                .execute("touch \"$(date \"+%F %T\")\"");
 
         mvc.perform(post("/api/commands/touch").contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isInternalServerError())

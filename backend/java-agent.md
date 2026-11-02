@@ -4,7 +4,7 @@
 
 - Bouw een Java 27-applicatie met Spring Boot.
 - Gebruik Maven als buildtool.
-- Gebruik de JDK die op het systeem is geinstalleerd en ga niet zelf java of maven downloaden. Wanneer je het niet kunt vinden, vraag naar de locatie.
+- Gebruik de JDK die op het systeem is geinstalleerd en ga niet zelf java of maven downloaden. Wanneer je het niet kunt vinden, kijk hier /home/thomas/.sdkman/candidates/java/current/bin/java en hier /home/thomas/.sdkman/candidates/maven/current/bin/mvn en anders vraag naar de locatie.
 - Gebruik Lombok om boilerplate te verminderen en Java records waar passend, bijvoorbeeld voor immutable DTO's.
 - Voeg voorlopig geen database of persistence-framework toe. Kies deze pas wanneer opslag nodig is.
 
