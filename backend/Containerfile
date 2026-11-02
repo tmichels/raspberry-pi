@@ -1,0 +1,17 @@
+FROM docker.io/library/maven:3-eclipse-temurin-27 AS build
+WORKDIR /build
+COPY pom.xml ./
+COPY src ./src
+RUN mvn -B -ntp clean package
+
+FROM docker.io/library/eclipse-temurin:27-jre
+WORKDIR /app
+RUN groupadd --gid 10001 app \
+    && useradd --uid 10001 --gid app --no-create-home app \
+    && mkdir /data \
+    && chown app:app /data
+COPY --from=build /build/target/raspberry-pi-0.0.1-SNAPSHOT.jar app.jar
+ENV PI_COMMANDS_DIRECTORY=/data
+USER 10001:10001
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]

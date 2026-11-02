@@ -56,14 +56,14 @@ Met `SERVER_ADDRESS=127.0.0.1` beperk je de server tot de Pi zelf.
 Voer vanuit `backend` uit:
 
 ```sh
-podman build -t localhost/pi-backend -f Dockerfile .
+podman build -t localhost/pi-backend .
 podman run -d --name pi-backend \
   -p 8080:8080 \
   -v pi-backend-data:/data \
   localhost/pi-backend
 ```
 
-De Dockerfile bouwt en test de applicatie met Maven en Java 27.
+De Containerfile bouwt en test de applicatie met Maven en Java 27.
 De API is bereikbaar op `http://<ip-adres-van-de-pi>:8080`.
 De container draait als gebruiker `10001` en schrijft bestanden in `/data`.
 Het Podman-volume `pi-backend-data` bewaart deze bestanden bij het vervangen
