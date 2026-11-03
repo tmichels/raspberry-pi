@@ -1,11 +1,19 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
+import { getAccessToken, logout } from './auth';
+
+vi.mock('./auth', () => ({
+  getAccessToken: vi.fn().mockResolvedValue('access-token'),
+  getUsername: () => 'donna-user',
+  logout: vi.fn().mockResolvedValue(undefined),
+}));
 
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  vi.mocked(getAccessToken).mockResolvedValue('access-token');
 });
 
 function clickCreateFile() {
@@ -16,10 +24,10 @@ function clickCreateFile() {
 }
 
 describe('Raspberry Pi bediening', () => {
-  it('shows the action and the authentication warning', () => {
+  it('shows the action and the signed-in user', () => {
     render(<App />);
     expect(screen.getByRole('heading').textContent).toBe('Raspberry Pi bediening');
-    expect(screen.getByText(/Deze POC heeft geen authenticatie/)).toBeDefined();
+    expect(screen.getByText('Ingelogd als donna-user.')).toBeDefined();
     expect(screen.getByRole('status').textContent).toBe('');
   });
 
@@ -39,7 +47,7 @@ describe('Raspberry Pi bediening', () => {
     expect(button.disabled).toBe(false);
     expect(fetchMock).toHaveBeenCalledExactlyOnceWith('/api/commands/touch', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer access-token' },
       body: '{}',
       signal: expect.any(AbortSignal),
     });
@@ -55,6 +63,7 @@ describe('Raspberry Pi bediening', () => {
 
     expect(button.disabled).toBe(true);
     expect(screen.getByRole('status').textContent).toBe('Commando wordt uitgevoerd...');
+    await waitFor(() => expect(finishRequest).toBeDefined());
     finishRequest(new Response(JSON.stringify({ output: '', exitCode: 0 })));
     await waitFor(() => expect(button.disabled).toBe(false));
   });
@@ -74,7 +83,9 @@ describe('Raspberry Pi bediening', () => {
 
   it('shows the backend problem detail and allows another request', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ detail: 'Controleer de logs op de Raspberry Pi.' }), { status: 500 }),
+      new Response(JSON.stringify({ detail: 'Controleer de logs op de Raspberry Pi.' }), {
+        status: 500, headers: { 'Content-Type': 'application/problem+json' },
+      }),
     ));
     const button = clickCreateFile();
 
@@ -115,5 +126,38 @@ describe('Raspberry Pi bediening', () => {
       expect(screen.getByRole('status').textContent).toBe('Mislukt: Failed to fetch');
     });
     expect(button.disabled).toBe(false);
+  });
+
+  it('does not call the backend when token refresh fails', async () => {
+    vi.mocked(getAccessToken).mockRejectedValue(new Error('Je sessie is verlopen.'));
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const button = clickCreateFile();
+
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Mislukt: Je sessie is verlopen.'));
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(button.disabled).toBe(false);
+  });
+
+  it.each([401, 403])('shows an explicit error for an empty HTTP %s response without retrying', async (status) => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status }));
+    vi.stubGlobal('fetch', fetchMock);
+    clickCreateFile();
+
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain(`HTTP ${status}`));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('logs out through Keycloak', async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Uitloggen' }));
+    await waitFor(() => expect(logout).toHaveBeenCalledTimes(1));
+  });
+
+  it('shows logout failures', async () => {
+    vi.mocked(logout).mockRejectedValueOnce(new Error('Keycloak niet bereikbaar'));
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Uitloggen' }));
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Uitloggen mislukt: Keycloak niet bereikbaar'));
   });
 });

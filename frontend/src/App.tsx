@@ -1,9 +1,18 @@
 import { useState } from 'react';
 import { createFile } from './api';
+import { getUsername, logout } from './auth';
 
 export default function App() {
   const [isRunning, setIsRunning] = useState(false);
   const [status, setStatus] = useState('');
+
+  async function handleLogout() {
+    try {
+      await logout();
+    } catch (error) {
+      setStatus(`Uitloggen mislukt: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
 
   async function handleCreateFile() {
     setIsRunning(true);
@@ -29,6 +38,8 @@ export default function App() {
   return (
     <main>
       <h1>Raspberry Pi bediening</h1>
+      <p>Ingelogd als {getUsername()}.</p>
+      <button type="button" disabled={isRunning} onClick={handleLogout}>Uitloggen</button>
       <p>Maak een bestand met de huidige datum en tijd op de Raspberry Pi.</p>
       <button type="button" disabled={isRunning} onClick={handleCreateFile}>
         Bestand aanmaken

@@ -1,10 +1,14 @@
 # Raspberry Pi frontend
 
 React/TypeScript-applicatie met Vite. De knop maakt via de backend een bestand
-aan en toont de exitcode, output of foutmelding.
+aan en toont de exitcode, output of foutmelding. Inloggen verloopt via Keycloak
+(realm `donna`, publieke client `pi`, Authorization Code met PKCE).
+De bediening wordt pas na inloggen getoond. Access tokens blijven in het
+geheugen en worden voor API-verzoeken zo nodig vernieuwd.
 
 Voer de commando's uit vanuit `frontend`. Gebruik de applicatie op een
-vertrouwd lokaal netwerk.
+vertrouwd lokaal netwerk. Configureer eerst client `pi` zoals beschreven in
+[`../keycloak/README.md`](../keycloak/README.md).
 
 ## Lokaal starten
 
@@ -15,22 +19,37 @@ npm ci
 BACKEND_URL=http://127.0.0.1:8080 npm run dev
 ```
 
-Open `http://localhost:5173`. Voor toegang vanaf je telefoon voeg je
-`-- --host 0.0.0.0` toe en open je `http://<ip-adres-van-je-computer>:5173`.
+Open `http://localhost:5173`; je wordt doorgestuurd naar Keycloak.
+De standaard Keycloak-URL is `http://192.168.178.96:9000`. Voor een andere URL:
+
+```sh
+VITE_KEYCLOAK_URL=https://login.example.com \
+  BACKEND_URL=http://127.0.0.1:8080 npm run dev
+```
+
+Toegang via een LAN-IP (bijvoorbeeld vanaf je telefoon) vereist HTTPS voor
+frontend en Keycloak; zie de Keycloak-README. Alleen localhost mag voor lokale
+ontwikkeling HTTP gebruiken vanwege de Web Crypto-eis van PKCE.
 
 ## Deployen met Podman
 
 Kopieer deze map naar een Raspberry Pi met ARM64 en Podman. Bouw en start:
 
 ```sh
-podman build -t localhost/pi-frontend .
+podman build --build-arg VITE_KEYCLOAK_URL=https://login.example.com \
+  -t localhost/pi-frontend .
 podman run -d --name pi-frontend \
   -p 8081:8080 \
   -e BACKEND_URL=http://host.containers.internal:8080 \
   localhost/pi-frontend
 ```
 
-Open `http://<ip-adres-van-de-pi>:8081`.
+Plaats een HTTPS-reverse-proxy voor poort 8081 en open de publieke HTTPS-URL.
+Voeg deze exacte origin toe aan de Keycloak-clientinstellingen.
+Vervang `https://login.example.com` door jouw bereikbare HTTPS-Keycloak-URL.
+`VITE_KEYCLOAK_URL` zit in de build; geef een wijziging dus bij het bouwen mee,
+niet als omgevingsvariabele aan `podman run`. Zonder build-argument wordt de
+HTTP-Keycloak-URL uit de lokale configuratie gebruikt.
 
 `BACKEND_URL` bevat het backendadres met protocol en poort, zonder pad of
 afsluitende slash. Nginx stuurt `/api` door naar dit adres.
@@ -50,7 +69,8 @@ frontendcommando `--network pi-app` toe en gebruik
 ### Bijwerken
 
 ```sh
-podman build -t localhost/pi-frontend .
+podman build --build-arg VITE_KEYCLOAK_URL=https://login.example.com \
+  -t localhost/pi-frontend .
 podman stop pi-frontend
 podman rm pi-frontend
 ```
@@ -76,8 +96,13 @@ De preview is bereikbaar op `http://localhost:4173`.
 | Verzoek/resultaat | Formaat |
 |---|---|
 | Verzoek | `POST /api/commands/touch`, `Content-Type: application/json`, body `{}` |
+| Authenticatie | `Authorization: Bearer <access-token>` (geen ID token) |
 | Afgerond commando | HTTP 200 met `{"output":"","exitCode":0}` |
+| Ongeldig/ontbrekend token | HTTP 401; herlaad de pagina om opnieuw in te loggen |
 | Serverfout | HTTP-foutstatus met `{"detail":"Foutmelding"}` |
 
 `output` is een string en `exitCode` een getal. Een exitcode ongelijk aan
 nul wordt als mislukt commando getoond.
+Een mislukte tokenvernieuwing wordt getoond zonder een API-verzoek te sturen.
+API-verzoeken worden niet automatisch herhaald om dubbele uitvoering te voorkomen.
+Met **Uitloggen** wordt de sessie bij Keycloak beeindigd.
