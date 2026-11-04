@@ -25,10 +25,10 @@ De startcommando's hieronder vereisen vrije containernamen. Stop en verwijder
 bij vervanging eerst de bestaande container; verwijder geen gegevensvolumes.
 Vervanging onderbreekt de applicatie tijdelijk.
 
-Controleer of HTTPS-poort 443 vrij is:
+Controleer of poorten 80 (HTTP-redirect) en 443 (HTTPS) vrij zijn:
 
 ```sh
-sudo ss -ltn '( sport = :443 )'
+sudo ss -ltn '( sport = :80 or sport = :443 )'
 ```
 
 Laat beide domeinnamen op je Linux-client naar de Pi verwijzen.
@@ -129,8 +129,22 @@ sudo podman run -d --name pi-proxy \
   docker.io/library/nginx:1.28
 ```
 
-Er is geen `-p` nodig door het hostnetwerk. De configuratie biedt alleen
-HTTPS aan, geen HTTP-redirect op poort 80.
+Er is geen `-p` nodig door het hostnetwerk. Poort 80 stuurt verzoeken voor
+beide namen met HTTP 308 door naar HTTPS, met behoud van pad en query.
+Zo werkt ook een browser die bij een adres zonder protocol eerst HTTP
+probeert. De applicaties blijven achter HTTPS; stuur tokens of wachtwoorden
+altijd direct via HTTPS, want een redirect beveiligt het eerste HTTP-verzoek niet.
+
+Bij een bestaande proxy: controleer op de Pi eerst of poort 80 vrij is,
+werk `proxy/nginx.conf` bij en herlaad Nginx met het commando onder Onderhoud.
+Controleer daarna vanaf je client:
+
+```sh
+curl -I http://pi.thomasmichels.nl
+curl -I http://login.thomasmichels.nl
+```
+
+Verwacht HTTP 308 met een `Location` naar de bijbehorende HTTPS-URL.
 
 ## 4. Keycloak instellen
 
