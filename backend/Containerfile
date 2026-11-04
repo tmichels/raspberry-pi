@@ -5,6 +5,8 @@ COPY src ./src
 RUN mvn -B -ntp clean package
 
 FROM docker.io/library/eclipse-temurin:27-jre
+ENV TZ=Europe/Amsterdam
+ENV JAVA_TOOL_OPTIONS=-Duser.timezone=Europe/Amsterdam
 WORKDIR /app
 RUN groupadd --gid 10001 app \
     && useradd --uid 10001 --gid app --no-create-home app \

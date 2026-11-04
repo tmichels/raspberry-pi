@@ -23,7 +23,7 @@ Open `http://localhost:5173`; je wordt doorgestuurd naar Keycloak.
 De standaard Keycloak-URL is `http://192.168.178.96:9000`. Voor een andere URL:
 
 ```sh
-VITE_KEYCLOAK_URL=https://login.example.com \
+VITE_KEYCLOAK_URL=https://login.thomasmichels.nl \
   BACKEND_URL=http://127.0.0.1:8080 npm run dev
 ```
 
@@ -33,45 +33,45 @@ ontwikkeling HTTP gebruiken vanwege de Web Crypto-eis van PKCE.
 
 ## Deployen met Podman
 
-Kopieer deze map naar een Raspberry Pi met ARM64 en Podman. Bouw en start:
+Gebruik op de Pi losse rootless containers op netwerk `pi-app`.
+Volg eerst de [HTTPS-handleiding](../proxy/README.md) voor certificaten,
+Nginx, Keycloak en het aanmaken van het netwerk. Start de
+[backend](../backend/README.md#container-met-podman) op hetzelfde netwerk.
+De onderstaande commando's gaan uit van een eerste start, zonder bestaande
+frontendcontainer.
+
+Bouw en start vanuit `frontend`:
 
 ```sh
-podman build --build-arg VITE_KEYCLOAK_URL=https://login.example.com \
-  -t localhost/pi-frontend .
-podman run -d --replace --name pi-frontend \
-  -p 8081:8080 \
-  -e BACKEND_URL=http://host.containers.internal:8080 \
+podman build --build-arg VITE_KEYCLOAK_URL=https://login.thomasmichels.nl \
+  -t localhost/pi-frontend . &&
+podman run -d --name pi-frontend \
+  --network pi-app \
+  -p 127.0.0.1:8081:8080 \
+  -e BACKEND_URL=http://pi-backend:8080 \
   localhost/pi-frontend
 ```
 
-Plaats een HTTPS-reverse-proxy voor poort 8081 en open de publieke HTTPS-URL.
-Voeg deze exacte origin toe aan de Keycloak-clientinstellingen.
-Vervang `https://login.example.com` door jouw bereikbare HTTPS-Keycloak-URL.
+Open `https://pi.thomasmichels.nl`, niet de interne HTTP-poort.
+De loopbackbinding maakt poort 8081 alleen op de Pi bereikbaar voor Nginx.
+Configureer de exacte redirect-, logout- en web-originwaarden in Keycloak
+volgens de HTTPS-handleiding.
 `VITE_KEYCLOAK_URL` zit in de build; geef een wijziging dus bij het bouwen mee,
 niet als omgevingsvariabele aan `podman run`. Zonder build-argument wordt de
 HTTP-Keycloak-URL uit de lokale configuratie gebruikt.
 
 `BACKEND_URL` bevat het backendadres met protocol en poort, zonder pad of
 afsluitende slash. Nginx stuurt `/api` door naar dit adres.
-`host.containers.internal` verwijst naar de Pi; de backend moet luisteren
-op een interface die vanuit de container bereikbaar is.
-
-Voor een backendcontainer gebruik je een gedeeld Podman-netwerk:
-
-```sh
-podman network create pi-app
-```
-
-Start de backend met `--network pi-app --name backend`. Voeg aan het
-frontendcommando `--network pi-app` toe en gebruik
-`-e BACKEND_URL=http://backend:8080`.
+Podman vertaalt `pi-backend` binnen `pi-app` naar de backendcontainer.
+Daardoor hoeft de backend geen poort op de Pi te publiceren. Het netwerk
+wordt bij `podman run` gekozen, niet in de Containerfile.
 
 ### Bijwerken
 
 ```sh
-podman build --build-arg VITE_KEYCLOAK_URL=https://login.example.com \
-  -t localhost/pi-frontend .
-podman stop pi-frontend
+podman build --build-arg VITE_KEYCLOAK_URL=https://login.thomasmichels.nl \
+  -t localhost/pi-frontend . &&
+podman stop pi-frontend &&
 podman rm pi-frontend
 ```
 

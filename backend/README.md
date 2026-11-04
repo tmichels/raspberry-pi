@@ -65,7 +65,7 @@ De standaard issuer is `http://192.168.178.96:9000/realms/donna`.
 Voor een andere Keycloak-URL:
 
 ```sh
-KEYCLOAK_ISSUER_URI=https://login.example.com/realms/donna \
+KEYCLOAK_ISSUER_URI=https://login.thomasmichels.nl/realms/donna \
   PI_COMMANDS_DIRECTORY=./data mvn spring-boot:run
 ```
 
@@ -77,18 +77,31 @@ van het commando. React gebruikt de bestaande `/api`-proxy; CORS is niet nodig.
 
 ## Container met Podman
 
-Voer vanuit `backend` uit:
+Gebruik op de Pi een losse rootless container op netwerk `pi-app`.
+Volg eerst de [HTTPS-handleiding](../proxy/README.md) voor de proxy,
+Keycloak en het aanmaken van het netwerk. Deze commando's gaan uit van
+een eerste start, zonder bestaande backendcontainer.
+
+Voer vanuit `backend`, zonder `sudo`, uit:
 
 ```sh
-podman build -t localhost/pi-backend .
-podman run -d --replace --name pi-backend \
-  -p 8080:8080 \
+podman build -t localhost/pi-backend . &&
+podman run -d --name pi-backend \
+  --network pi-app \
+  --add-host login.thomasmichels.nl:host-gateway \
+  -e KEYCLOAK_ISSUER_URI=https://login.thomasmichels.nl/realms/donna \
+  -e PI_COMMANDS_DIRECTORY=/data \
   -v pi-backend-data:/data \
   localhost/pi-backend
 ```
 
 De Containerfile bouwt en test de applicatie met Maven en Java 27.
-De API is bereikbaar op `http://<ip-adres-van-de-pi>:8080`.
+De frontend bereikt de API op `http://pi-backend:8080` binnen `pi-app`.
+Er wordt geen backendpoort op de Pi gepubliceerd; apparaten gebruiken
+`https://pi.thomasmichels.nl/api` via de frontend en HTTPS-proxy.
+`--add-host` laat de backend het HTTPS-adres van Keycloak via de Pi bereiken.
+De issuer blijft de externe HTTPS-URL, zodat deze overeenkomt met tokens.
+Netwerktoewijzing gebeurt bij `podman run`, niet in de Containerfile.
 De container draait als gebruiker `10001` en schrijft bestanden in `/data`.
 Het Podman-volume `pi-backend-data` bewaart deze bestanden bij het vervangen
 van de container. De Linux-commando's worden binnen de container uitgevoerd.
@@ -115,7 +128,7 @@ Datum en tijd worden volledig door het Linux-commando
 bepaald, niet door Java.
 
 ```sh
-curl -X POST http://<ip-adres-van-de-pi>:8080/api/commands/touch \
+curl -X POST https://pi.thomasmichels.nl/api/commands/touch \
   -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H 'Content-Type: application/json' -d '{}'
 ```
