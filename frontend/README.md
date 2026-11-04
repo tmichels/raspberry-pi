@@ -14,13 +14,22 @@ vertrouwd lokaal netwerk. Configureer eerst client `pi` zoals beschreven in
 
 Vereist Node.js 26 LTS met npm en een draaiende backend.
 
+`frontend/.env` bevat de instellingen voor lokaal ontwikkelen met Keycloak
+op de Pi en de backend op `127.0.0.1:8080`. Vite leest dit bestand automatisch.
+Gebruik in IntelliJ een npm-runconfiguratie voor `dev`, met `frontend` als
+werkmap. Je kunt hetzelfde bestand ook als environmentbestand laden.
+De Pi moet bereikbaar zijn en Keycloak-client `pi` moet de localhost-URL's
+toestaan volgens de Keycloak-README.
+
 ```sh
 npm ci
 BACKEND_URL=http://127.0.0.1:8080 npm run dev
 ```
 
 Open `http://localhost:5173`; je wordt doorgestuurd naar Keycloak.
-De standaard Keycloak-URL is `http://192.168.178.96:9000`. Voor een andere URL:
+Het meegeleverde `.env` gebruikt `https://login.thomasmichels.nl`.
+Zonder configuratie valt de code terug op `http://192.168.178.96:9000`.
+Voor een andere URL:
 
 ```sh
 VITE_KEYCLOAK_URL=https://login.thomasmichels.nl \

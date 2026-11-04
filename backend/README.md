@@ -14,6 +14,12 @@ Spring Boot 4.1.2 wordt gebruikt met de standaard JUnit 6-testdependencies.
 
 De onderstaande Java-commando's voer je uit vanuit `backend`.
 
+Voor lokaal starten vanuit IntelliJ: laad `backend/.env` als environmentbestand
+in de runconfiguratie en stel de werkmap in op `backend`. Maak daar eerst
+de map `data` aan. Spring Boot leest `.env` niet automatisch.
+De configuratie gebruikt de HTTPS-Keycloak op de Pi en een lokale backend
+op `127.0.0.1:8080`; de Pi moet vanaf je computer bereikbaar zijn.
+
 ```sh
 mkdir -p data
 PI_COMMANDS_DIRECTORY=./data mvn spring-boot:run
