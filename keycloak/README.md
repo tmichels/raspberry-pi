@@ -2,7 +2,7 @@
 
 Opstartcommando:
 ```bash
-podman run --replace --name keycloak \
+podman run --replace -d --name keycloak \
   -p 9000:8080 \
   -v keycloak-data:/opt/keycloak/data \
   -e KC_HTTP_ENABLED=true \
