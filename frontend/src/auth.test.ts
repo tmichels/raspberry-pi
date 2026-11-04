@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  configure: vi.fn(),
   init: vi.fn(),
   updateToken: vi.fn(),
   clearToken: vi.fn(),
@@ -10,6 +11,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('keycloak-js', () => ({
   default: class {
+    constructor(config: object) { mocks.configure(config); }
     init = mocks.init;
     updateToken = mocks.updateToken;
     clearToken = mocks.clearToken;
@@ -28,6 +30,15 @@ beforeEach(() => {
 });
 
 describe('Keycloak adapter', () => {
+  it('uses the same HTTPS Keycloak URL in every environment', async () => {
+    await import('./auth');
+    expect(mocks.configure).toHaveBeenCalledExactlyOnceWith({
+      url: 'https://login.thomasmichels.nl',
+      realm: 'donna',
+      clientId: 'pi',
+    });
+  });
+
   it('initializes login-required with PKCE only once', async () => {
     mocks.init.mockResolvedValue(true);
     const { initializeAuth } = await import('./auth');

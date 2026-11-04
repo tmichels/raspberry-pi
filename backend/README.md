@@ -1,192 +1,67 @@
-# Raspberry Pi bediening
+# Raspberry Pi backend
 
-Een zelfstandige Java 27/Spring Boot-API voor vaste Linux-acties.
-Geen database. Alle endpoints vereisen een Keycloak bearer access token.
-Spring Boot 4.1.2 wordt gebruikt met de standaard JUnit 6-testdependencies.
-
-## Vereisten
-
-- Java 27 (op de Pi een JDK/JRE passend bij de architectuur, bijvoorbeeld ARM64).
-- Linux met `/bin/sh` en `touch` en `date` in het `PATH`.
-- Een geinstalleerde Maven voor het bouwen. Gebruik de JDK en Maven van het systeem.
-
-## Starten
-
-De onderstaande Java-commando's voer je uit vanuit `backend`.
-
-Voor lokaal starten vanuit IntelliJ: laad `backend/.env` als environmentbestand
-in de runconfiguratie en stel de werkmap in op `backend`. Maak daar eerst
-de map `data` aan. Spring Boot leest `.env` niet automatisch.
-De configuratie gebruikt de HTTPS-Keycloak op de Pi en een lokale backend
-op `127.0.0.1:8080`; de Pi moet vanaf je computer bereikbaar zijn.
-
-```sh
-mkdir -p data
-PI_COMMANDS_DIRECTORY=./data mvn spring-boot:run
-```
-
-De API is beschikbaar op poort 8080.
-De server luistert standaard op alle netwerkinterfaces.
-Configureer eerst realm `donna` en client `pi` volgens
-[`../keycloak/README.md`](../keycloak/README.md).
-
-Een uitvoerbare jar bouwen en op de Pi starten:
-
-```sh
-mvn clean package
-PI_COMMANDS_DIRECTORY=./data java -jar target/raspberry-pi-0.0.1-SNAPSHOT.jar
-```
-
-Voer de applicatie uit als een gewone gebruiker, niet als root. Bestanden komen
-met bovenstaande commando's in `./data`, relatief aan de werkmap waarin je de applicatie start.
-Geef `PI_COMMANDS_DIRECTORY` expliciet mee: `application.properties` bevat
-momenteel een absoluut lokaal ontwikkelpad.
-De applicatie maakt geen map aan. Dit geldt ook voor een map die je via
-`PI_COMMANDS_DIRECTORY` instelt. Maak de standaardmap zo nodig zelf aan
-voordat je de applicatie gebruikt:
-
-```sh
-mkdir -p data
-```
-
-Configuratie via omgevingsvariabelen:
-
-```sh
-PI_COMMANDS_DIRECTORY=/home/pi/poc-files SERVER_PORT=8080 \
-  java -jar target/raspberry-pi-0.0.1-SNAPSHOT.jar
-```
-
-Met `SERVER_ADDRESS=127.0.0.1` beperk je de server tot de Pi zelf.
+Een zelfstandige Java/Spring Boot-API voor vaste Linux-acties. Alle endpoints vereisen een Keycloak bearer access token (behalve swagger).
 
 ## Authenticatie
 
-De backend is een stateless OAuth 2.0 Resource Server: geen loginpagina,
-sessiecookie of client secret. Spring Security valideert de JWT-handtekening
-met de publieke sleutels van Keycloak, de geldigheid, issuer en audience `pi`.
-Alle ingelogde gebruikers met zo'n token krijgen toegang; er zijn geen
-rolbeperkingen. CSRF is uitgeschakeld omdat uitsluitend bearer tokens in de
-Authorization-header worden gebruikt, geen cookies.
+De backend is een stateless OAuth 2.0 Resource Server. Spring Security valideert de JWT-handtekening
+met de publieke sleutels van Keycloak. Zie [Keycloak-handleiding](../keycloak/README.md). CSRF is uitgeschakeld omdat
+uitsluitend bearer tokens in de Authorization-header worden gebruikt, geen
+cookies.
 
-De standaard issuer is `http://192.168.178.96:9000/realms/donna`.
-Voor een andere Keycloak-URL:
-
-```sh
-KEYCLOAK_ISSUER_URI=https://login.thomasmichels.nl/realms/donna \
-  PI_COMMANDS_DIRECTORY=./data mvn spring-boot:run
-```
-
-Geef dezelfde variabele bij `java -jar` of via `podman run -e` mee.
+De issuer staat in `src/main/resources/application.properties` en is voor
+lokaal ontwikkelen en Podman https://login.thomasmichels.nl/realms/donna .
 De issuer moet exact overeenkomen met Keycloak's `iss`-claim en vanuit de
-backend bereikbaar zijn. De audience-mapper voor client `pi` is verplicht.
+backend bereikbaar zijn. De Keycloak-handleiding beschrijft de verplichte
+audience-mapper voor client `pi`.
 Ontbrekende, verlopen of ongeldige tokens geven HTTP 401 zonder uitvoering
 van het commando. React gebruikt de bestaande `/api`-proxy; CORS is niet nodig.
 
 ## Container met Podman
 
 Gebruik op de Pi een losse rootless container op netwerk `pi-app`.
-Volg eerst de [HTTPS-handleiding](../proxy/README.md) voor de proxy,
-Keycloak en het aanmaken van het netwerk. Deze commando's gaan uit van
-een eerste start, zonder bestaande backendcontainer.
+De backendcontainer moet Keycloak kunnen bereiken en deelt dit netwerk met
+de [frontend](../frontend/README.md).
+Configureer [Keycloak](../keycloak/README.md) en de
+[HTTPS-proxy](../proxy/README.md) volgens hun eigen handleidingen.
+Maak vooraf het [gedeelde Podman-netwerk](../README.md#gedeeld-podman-netwerk)
+aan.
 
-Voer vanuit `backend`, zonder `sudo`, uit:
+Voer vanuit `backend` uit:
 
 ```sh
 podman build -t localhost/pi-backend . &&
-podman run -d --name pi-backend \
+podman run -d --replace --name pi-backend \
   --network pi-app \
   --userns=keep-id:uid=10001,gid=10001 \
   --add-host login.thomasmichels.nl:host-gateway \
-  -e KEYCLOAK_ISSUER_URI=https://login.thomasmichels.nl/realms/donna \
   -e PI_COMMANDS_DIRECTORY=/data \
   -v pi-backend-data:/data \
   -v /home/thomas/muziek:/home/thomas/muziek:ro \
   localhost/pi-backend
 ```
 
-De Containerfile bouwt en test de applicatie met Maven en Java 27.
-De frontend bereikt de API op `http://pi-backend:8080` binnen `pi-app`.
-Er wordt geen backendpoort op de Pi gepubliceerd; apparaten gebruiken
-`https://pi.thomasmichels.nl/api` via de frontend en HTTPS-proxy.
-`--add-host` laat de backend het HTTPS-adres van Keycloak via de Pi bereiken.
-De issuer blijft de externe HTTPS-URL, zodat deze overeenkomt met tokens.
-Netwerktoewijzing gebeurt bij `podman run`, niet in de Containerfile.
-De container draait als gebruiker `10001` en schrijft bestanden in `/data`.
-De muziekmap wordt alleen-lezen in de container gekoppeld voor de actie
-`/api/commands/music-directories`.
-Het Podman-volume `pi-backend-data` bewaart deze bestanden bij het vervangen
-van de container. De Linux-commando's worden binnen de container uitgevoerd.
-
-Bouw op de Pi zelf voor de architectuur van de Pi.
-Logs bekijken: `podman logs pi-backend`.
+- `-t localhost/pi-backend .`  tagt met `localhost/pi-backend`.
+- `-d` start op de achtergrond.
+- `--replace --name pi-backend` vervangt een eventuele bestaande container
+  met deze naam.
+- `--network pi-app` maakt de backend via `http://pi-backend:8080` bereikbaar
+  voor de frontend op netwerk pi-app. Er is geen `-p` ingesteld:
+  apparaten gebruiken `https://pi.thomasmichels.nl/api` via de frontend en
+  HTTPS-proxy.
+- `--userns=keep-id:uid=10001,gid=10001` koppelt de huidige hostgebruiker aan
+  de containergebruiker met UID en GID `10001`, zoals ingesteld in de Containerfile.
+- `--add-host login.thomasmichels.nl:host-gateway` laat de backend Keycloak
+  via de Pi bereiken. De issuer blijft de externe HTTPS-URL, zodat deze
+  overeenkomt met tokens.
+- `-e PI_COMMANDS_DIRECTORY=/data` stelt de werkmap voor de Linux-acties in.
+- `-v pi-backend-data:/data` bewaart de aangemaakte bestanden in een
+  Podman-volume.
+- `-v /home/thomas/muziek:/home/thomas/muziek:ro` mount volume read only voor de actie `/api/commands/music-directories`.
 
 ## Actie en API
 
-Een client verstuurt `POST /api/commands/touch` of
-`POST /api/commands/music-directories`. De backend voert alleen vaste acties
-uit via `ProcessBuilder` en `/bin/sh -c`, zonder commando-invoer van de client.
-`CommandService.execute(String command)` verzorgt de generieke uitvoering.
-De controller bepaalt het vaste commando; toekomstige acties kunnen dezelfde
-service gebruiken. Er is geen endpoint voor willekeurige commando's.
-De shell voert exact dit commando uit:
-
-```sh
-touch "$(date "+%F %T")"
-```
-
-De gequote command substitution maakt een bestand met de datum en tijd
-als naam. Een bestaand bestand met dezelfde naam wordt bijgewerkt.
-Datum en tijd worden volledig door het Linux-commando
-bepaald, niet door Java.
-
-De muziekactie voert het volgende vaste commando uit en geeft de gevonden
-mappen relatief aan `/home/thomas/muziek/` terug:
-
-```sh
-find /home/thomas/muziek/ -mindepth 2 -type d -printf '%P\n'
-```
-
-```sh
-curl -X POST https://pi.thomasmichels.nl/api/commands/touch \
-  -H "Authorization: Bearer $ACCESS_TOKEN" \
-  -H 'Content-Type: application/json' -d '{}'
-```
-
-`ACCESS_TOKEN` moet een geldig access token uit realm `donna` met audience `pi`
-bevatten. Gebruik geen ID token en zet tokens niet in broncode of logs.
-
-Een afgerond commando geeft HTTP 200 met de gecombineerde standaardoutput
-en foutoutput en de exitcode:
-
-```json
-{"output":"","exitCode":0}
-```
-
-`touch` geeft bij succes normaal geen output. Ook een niet-nul exitcode wordt
-met output teruggegeven.
-De muziekactie geeft de mapnamen als output terug.
-De output wordt tijdens uitvoering naar een tijdelijk bestand geschreven
-om blokkeren op een volle procespipe te voorkomen. Dit bestand wordt na
-afloop verwijderd; de ingestelde werkmap wordt nog steeds niet aangemaakt.
-Het proces wordt via try-with-resources gesloten. Bij een time-out of
-onderbreking wordt een nog draaiend proces eerst expliciet gestopt, omdat
-`Process.close()` op het einde van het proces wacht.
-
-Een startfout, leesfout of time-out geeft HTTP 500 met een Problem Detail; details staan in de
-serverlogs. Het commando wordt na maximaal vijf seconden gestopt.
-
-**Let op:** stel de onversleutelde backendpoort 8080 niet bloot aan internet.
-Gebruik de API via de frontendproxy en gebruik HTTPS buiten localhost zodat
-bearer tokens niet onversleuteld over het netwerk worden verstuurd.
-
-## Tests
-
-De tests controleren de API, commando-uitvoering en tokenvalidatie (ontbrekend,
-ongeldig, verlopen, verkeerde issuer/audience en verkeerde handtekening).
-
-```sh
-mvn test
-```
-
-De tests gebruiken JUnit 6, Mockito en tijdelijke mappen. Tokenvalidatietests
-gebruiken lokaal gegenereerde RSA-sleutels en een tijdelijke HTTP-server voor
-de JWKS; een draaiende Keycloak is voor deze tests niet nodig.
+Zie [Swagger UI](https://pi.thomasmichels.nl/api/swagger-ui.html) en de
+[gegenereerde OpenAPI-specificatie](https://pi.thomasmichels.nl/api/v3/api-docs).
+Beide zijn zonder login bereikbaar; voor het uitvoeren van acties is een
+bearer access token nodig via **Authorize**.

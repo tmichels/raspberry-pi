@@ -6,7 +6,7 @@ Volg de [HTTPS-handleiding](../proxy/README.md) voor certificaten, Nginx
 en lokale naamherkenning. Keycloak draait als losse rootless container;
 de proxy bereikt hem via een loopbackpoort op de Pi.
 
-Voer op de Pi, zonder `sudo`, uit bij een bestaande adminaccount in
+Voer op de Pi, uit bij een bestaande adminaccount in
 volume `keycloak-data` en een vrije containernaam:
 
 ```sh
@@ -22,12 +22,7 @@ podman run -d --name keycloak \
   docker.io/keycloak/keycloak:26.8.1 start
 ```
 
-Bij een eerste start met een leeg volume zijn ook
-`KC_BOOTSTRAP_ADMIN_USERNAME` en `KC_BOOTSTRAP_ADMIN_PASSWORD` nodig.
-
-Voeg voor die eerste start aan het bovenstaande `podman run` toe,
-vóór de imagenaam:
-
+Bij een eerste start met een leeg volume zijn deze parameters nodig:
 ```sh
   -e KC_BOOTSTRAP_ADMIN_USERNAME=admin \
   -e KC_BOOTSTRAP_ADMIN_PASSWORD="$KC_BOOTSTRAP_ADMIN_PASSWORD" \
@@ -41,10 +36,9 @@ De binding aan `127.0.0.1` voorkomt rechtstreekse HTTP-toegang vanaf het LAN.
 ## Authenticatie voor frontend en backend
 
 De applicaties gebruiken OpenID Connect/OAuth 2.0 met realm `donna` en client
-`pi`. React gebruikt Authorization Code met PKCE (`S256`); de backend valideert
-de handtekening, geldigheid, issuer en audience van het bearer access token.
-Alle ingelogde gebruikers van deze realm met audience `pi` krijgen toegang.
-Er zijn geen extra rollen vereist.
+`pi`. React gebruikt Authorization Code met PKCE (`S256`). De
+[backendhandleiding](../backend/README.md) beschrijft de tokenvalidatie en
+toegangsregels.
 
 Configureer in de Keycloak Admin Console realm `donna`, client `pi`:
 
@@ -56,32 +50,47 @@ Configureer in de Keycloak Admin Console realm `donna`, client `pi`:
 | Implicit flow | Off |
 | Direct access grants | Off |
 | PKCE Code Challenge Method (Advanced) | S256 |
-| Valid redirect URIs | `https://pi.thomasmichels.nl` en `https://pi.thomasmichels.nl/` |
+| Valid redirect URIs | `https://pi.thomasmichels.nl`, `https://pi.thomasmichels.nl/`, `http://localhost:5173`, `http://localhost:5173/`, `http://localhost:4173` en `http://localhost:4173/` |
 | Valid post logout redirect URIs | Dezelfde URL's als hierboven |
-| Web origins | `https://pi.thomasmichels.nl` |
+| Web origins | `https://pi.thomasmichels.nl`, `http://localhost:5173` en `http://localhost:4173` |
 
 Gebruik expliciete URL's, geen wildcard `*`. De frontend gebruikt zijn eigen
 origin als login- en logoutcallback. Maak een gebruiker in realm `donna`
 met een wachtwoord.
 
-Sta beide redirectvarianten toe om een mismatch door de afsluitende slash
-te voorkomen. Voor lokale ontwikkeling kun je ook `http://localhost:5173`
-en `http://localhost:4173` aan de drie instellingen toevoegen.
+### Aangeven voor welke applicatie het token bedoeld is
 
-Voeg onder **Client scopes > pi-dedicated > Mappers** een mapper van type
-**Audience** toe met **Included Client Audience** = `pi`,
-**Add to access token** = On en **Add to ID token** = Off.
-Deze mapper moet standaard worden toegepast, niet alleen via een optionele
-scope. Zonder audience `pi` weigert de backend het token met HTTP 401.
+Na het inloggen geeft Keycloak de frontend een access token mee om de backend
+aan te roepen. In dat token staat een veld `aud` (*audience*): de applicaties
+waarvoor het token bedoeld is. De backend accepteert alleen tokens waarin
+`pi` als audience staat. Alleen succesvol inloggen is dus niet voldoende.
 
-Gebruik `VITE_KEYCLOAK_URL=https://login.thomasmichels.nl` voor de frontend
-tijdens bouwen of starten van Vite, en
-`KEYCLOAK_ISSUER_URI=https://login.thomasmichels.nl/realms/donna`
-bij het starten van de backend. Zonder die variabelen gebruiken de apps
-nog de oude HTTP-ontwikkeladressen.
-De issuer moet exact overeenkomen met de `iss`-claim van Keycloak; vervang hem
-niet door een intern containeradres. De backend moet die URL kunnen bereiken
-om de publieke sleutels van Keycloak op te halen.
+Een *mapper* is een Keycloak-instelling die informatie aan tokens toevoegt.
+Maak een Audience-mapper voor client `pi`:
+
+1. Selecteer realm **donna** in de Admin Console en open **Clients > pi**.
+2. Open het tabblad **Client scopes**, klik op **pi-dedicated** en open
+   **Mappers**. Dit is de verzameling tokeninstellingen die specifiek bij
+   client `pi` hoort.
+3. Kies **Configure a new mapper** en selecteer het type **Audience**.
+4. Geef de mapper een herkenbare naam, bijvoorbeeld `pi-audience`, en stel
+   de onderstaande waarden in. Klik daarna op **Save**.
+
+| Instelling | Waarde | Betekenis |
+|---|---|---|
+| Included Client Audience | `pi` | Voegt `pi` toe aan het `aud`-veld. |
+| Add to access token | On | Past de instelling toe op het token waarmee de frontend de API aanroept. |
+| Add to ID token | Off | Het ID token beschrijft de ingelogde gebruiker en wordt niet gebruikt voor API-verzoeken. |
+
+Door de mapper onder **pi-dedicated** te plaatsen wordt hij automatisch
+toegepast bij het inloggen met client `pi`. Plaats hem niet uitsluitend in
+een optionele client scope: zo'n scope werkt alleen als de frontend er
+expliciet om vraagt. Zonder audience `pi` weigert de backend het access token
+met HTTP 401, ook als de gebruiker wel is ingelogd. Log na het wijzigen opnieuw
+in om een nieuw token met de audience te krijgen.
+
+Stel de Keycloak-URL en issuer in zoals beschreven in de
+[frontend](../frontend/README.md) en [backend](../backend/README.md)-handleidingen.
 
 ## HTTP en HTTPS
 
@@ -92,7 +101,7 @@ niet; de Keycloak-adapter heeft de Web Crypto API nodig voor PKCE en werkt daar
 niet. Voor toegang vanaf je telefoon of een andere computer moet de frontend
 via HTTPS met een vertrouwd certificaat worden aangeboden.
 
-De bovenstaande proxyopzet biedt frontend en Keycloak beide via HTTPS aan.
+De proxyopzet biedt frontend en Keycloak beide via HTTPS aan.
 Een HTTPS-frontend kan geen HTTP-Keycloak gebruiken vanwege mixed-content-
 beperkingen. Houd de frontend-URL, backend-issuer en clientinstellingen
 consistent en publiceer de interne HTTP-poorten niet op het LAN.
