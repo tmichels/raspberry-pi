@@ -37,6 +37,7 @@ public class CommandService {
     }
 
     private CommandResult executeProcess(String command, Path outputFile) throws InterruptedException {
+        createCommandDirectory();
         try (var process = new ProcessBuilder("/bin/sh", "-c", command)
                 .directory(commandProperties.directory().toFile())
                 .redirectErrorStream(true)
@@ -47,6 +48,16 @@ public class CommandService {
         } catch (IOException exception) {
             throw new CommandExecutionException(
                     "Het proces kon niet worden gestart of gesloten in %s.".formatted(commandProperties.directory()),
+                    exception);
+        }
+    }
+
+    private void createCommandDirectory() {
+        try {
+            Files.createDirectories(commandProperties.directory());
+        } catch (IOException exception) {
+            throw new CommandExecutionException(
+                    "De command-map kon niet worden aangemaakt in %s.".formatted(commandProperties.directory()),
                     exception);
         }
     }

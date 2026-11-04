@@ -35,7 +35,6 @@ Voer de applicatie uit als een gewone gebruiker, niet als root. Bestanden komen
 met bovenstaande commando's in `./data`, relatief aan de werkmap waarin je de applicatie start.
 Geef `PI_COMMANDS_DIRECTORY` expliciet mee: `application.properties` bevat
 momenteel een absoluut lokaal ontwikkelpad.
-De map moet vooraf bestaan en schrijfbaar zijn voor die gebruiker.
 De applicatie maakt geen map aan. Dit geldt ook voor een map die je via
 `PI_COMMANDS_DIRECTORY` instelt. Maak de standaardmap zo nodig zelf aan
 voordat je de applicatie gebruikt:

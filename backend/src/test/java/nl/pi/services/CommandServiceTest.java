@@ -46,11 +46,10 @@ class CommandServiceTest {
     }
 
     @Test
-    void doesNotCreateAMissingOutputDirectory() {
-        var exception = assertThrows(CommandExecutionException.class, () -> service.execute(TOUCH_COMMAND));
+    void createsAMissingOutputDirectory() throws IOException {
+        assertEquals(new CommandResult("", 0), service.execute(TOUCH_COMMAND));
 
-        assertInstanceOf(IOException.class, exception.getCause());
-        assertFalse(Files.exists(directory.resolve("files")));
+        assertTrue(Files.isDirectory(directory.resolve("files")));
     }
 
     @Test
