@@ -38,7 +38,7 @@ Kopieer deze map naar een Raspberry Pi met ARM64 en Podman. Bouw en start:
 ```sh
 podman build --build-arg VITE_KEYCLOAK_URL=https://login.example.com \
   -t localhost/pi-frontend .
-podman run -d --name pi-frontend \
+podman run -d --replace --name pi-frontend \
   -p 8081:8080 \
   -e BACKEND_URL=http://host.containers.internal:8080 \
   localhost/pi-frontend

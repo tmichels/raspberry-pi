@@ -81,7 +81,7 @@ Voer vanuit `backend` uit:
 
 ```sh
 podman build -t localhost/pi-backend .
-podman run -d --name pi-backend \
+podman run -d --replace --name pi-backend \
   -p 8080:8080 \
   -v pi-backend-data:/data \
   localhost/pi-backend
