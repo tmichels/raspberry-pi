@@ -1,7 +1,8 @@
 # Raspberry Pi frontend
 
-React/TypeScript-applicatie met Vite. De knop maakt via de backend een bestand
-aan en toont de exitcode, output of foutmelding. Inloggen verloopt via Keycloak
+React/TypeScript-applicatie met Vite. De bediening kan via de backend een bestand
+aanmaken of muziekmappen tonen, en toont de exitcode, output of foutmelding.
+Inloggen verloopt via Keycloak
 (realm `donna`, publieke client `pi`, Authorization Code met PKCE).
 De bediening wordt pas na inloggen getoond. Access tokens blijven in het
 geheugen en worden voor API-verzoeken zo nodig vernieuwd.
@@ -104,7 +105,7 @@ De preview is bereikbaar op `http://localhost:4173`.
 
 | Verzoek/resultaat | Formaat |
 |---|---|
-| Verzoek | `POST /api/commands/touch`, `Content-Type: application/json`, body `{}` |
+| Verzoek | `POST /api/commands/touch` of `POST /api/commands/music-directories`, `Content-Type: application/json`, body `{}` |
 | Authenticatie | `Authorization: Bearer <access-token>` (geen ID token) |
 | Afgerond commando | HTTP 200 met `{"output":"","exitCode":0}` |
 | Ongeldig/ontbrekend token | HTTP 401; herlaad de pagina om opnieuw in te loggen |
@@ -112,6 +113,7 @@ De preview is bereikbaar op `http://localhost:4173`.
 
 `output` is een string en `exitCode` een getal. Een exitcode ongelijk aan
 nul wordt als mislukt commando getoond.
+De muziekactie toont gevonden mapnamen relatief aan de muziekbibliotheek.
 Een mislukte tokenvernieuwing wordt getoond zonder een API-verzoek te sturen.
 API-verzoeken worden niet automatisch herhaald om dubbele uitvoering te voorkomen.
 Met **Uitloggen** wordt de sessie bij Keycloak beeindigd.

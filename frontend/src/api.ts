@@ -1,13 +1,13 @@
 import { getAccessToken } from './auth';
 
-type CommandResult = {
+export type CommandResult = {
   output: string;
   exitCode: number;
 };
 
-export async function createFile(): Promise<CommandResult> {
+async function executeCommand(endpoint: string): Promise<CommandResult> {
   const token = await getAccessToken();
-  const response = await fetch('/api/commands/touch', {
+  const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -31,4 +31,12 @@ export async function createFile(): Promise<CommandResult> {
   }
 
   return response.json();
+}
+
+export function createFile(): Promise<CommandResult> {
+  return executeCommand('/api/commands/touch');
+}
+
+export function listMusicDirectories(): Promise<CommandResult> {
+  return executeCommand('/api/commands/music-directories');
 }

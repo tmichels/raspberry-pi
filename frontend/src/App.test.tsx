@@ -23,6 +23,13 @@ function clickCreateFile() {
   return button;
 }
 
+function clickListMusicDirectories() {
+  render(<App />);
+  const button = screen.getByRole<HTMLButtonElement>('button', { name: 'Muziekmappen tonen' });
+  fireEvent.click(button);
+  return button;
+}
+
 describe('Raspberry Pi bediening', () => {
   it('shows the action and the signed-in user', () => {
     render(<App />);
@@ -52,6 +59,27 @@ describe('Raspberry Pi bediening', () => {
       signal: expect.any(AbortSignal),
     });
     expect(timeout).toHaveBeenCalledWith(10_000);
+  });
+
+  it('lists music directories and displays the command output', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ output: 'artiest/album\n', exitCode: 0 })),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const button = clickListMusicDirectories();
+
+    await waitFor(() => {
+      expect(screen.getByRole('status').textContent).toBe(
+        'Muziekmappen opgehaald.\nExitcode: 0\nOutput:\nartiest/album\n',
+      );
+    });
+    expect(button.disabled).toBe(false);
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith('/api/commands/music-directories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer access-token' },
+      body: '{}',
+      signal: expect.any(AbortSignal),
+    });
   });
 
   it('disables the button while waiting for the backend', async () => {

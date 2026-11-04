@@ -94,10 +94,12 @@ Voer vanuit `backend`, zonder `sudo`, uit:
 podman build -t localhost/pi-backend . &&
 podman run -d --name pi-backend \
   --network pi-app \
+  --userns=keep-id:uid=10001,gid=10001 \
   --add-host login.thomasmichels.nl:host-gateway \
   -e KEYCLOAK_ISSUER_URI=https://login.thomasmichels.nl/realms/donna \
   -e PI_COMMANDS_DIRECTORY=/data \
   -v pi-backend-data:/data \
+  -v /home/thomas/muziek:/home/thomas/muziek:ro \
   localhost/pi-backend
 ```
 
@@ -109,6 +111,8 @@ Er wordt geen backendpoort op de Pi gepubliceerd; apparaten gebruiken
 De issuer blijft de externe HTTPS-URL, zodat deze overeenkomt met tokens.
 Netwerktoewijzing gebeurt bij `podman run`, niet in de Containerfile.
 De container draait als gebruiker `10001` en schrijft bestanden in `/data`.
+De muziekmap wordt alleen-lezen in de container gekoppeld voor de actie
+`/api/commands/music-directories`.
 Het Podman-volume `pi-backend-data` bewaart deze bestanden bij het vervangen
 van de container. De Linux-commando's worden binnen de container uitgevoerd.
 
@@ -117,8 +121,9 @@ Logs bekijken: `podman logs pi-backend`.
 
 ## Actie en API
 
-Een client verstuurt `POST /api/commands/touch`. De backend voert alleen de vaste
-actie uit via `ProcessBuilder` en `/bin/sh -c`, zonder commando-invoer van de client.
+Een client verstuurt `POST /api/commands/touch` of
+`POST /api/commands/music-directories`. De backend voert alleen vaste acties
+uit via `ProcessBuilder` en `/bin/sh -c`, zonder commando-invoer van de client.
 `CommandService.execute(String command)` verzorgt de generieke uitvoering.
 De controller bepaalt het vaste commando; toekomstige acties kunnen dezelfde
 service gebruiken. Er is geen endpoint voor willekeurige commando's.
@@ -132,6 +137,13 @@ De gequote command substitution maakt een bestand met de datum en tijd
 als naam. Een bestaand bestand met dezelfde naam wordt bijgewerkt.
 Datum en tijd worden volledig door het Linux-commando
 bepaald, niet door Java.
+
+De muziekactie voert het volgende vaste commando uit en geeft de gevonden
+mappen relatief aan `/home/thomas/muziek/` terug:
+
+```sh
+find /home/thomas/muziek/ -mindepth 2 -type d -printf '%P\n'
+```
 
 ```sh
 curl -X POST https://pi.thomasmichels.nl/api/commands/touch \
@@ -151,6 +163,7 @@ en foutoutput en de exitcode:
 
 `touch` geeft bij succes normaal geen output. Ook een niet-nul exitcode wordt
 met output teruggegeven.
+De muziekactie geeft de mapnamen als output terug.
 De output wordt tijdens uitvoering naar een tijdelijk bestand geschreven
 om blokkeren op een volle procespipe te voorkomen. Dit bestand wordt na
 afloop verwijderd; de ingestelde werkmap wordt nog steeds niet aangemaakt.

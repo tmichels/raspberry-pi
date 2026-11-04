@@ -49,6 +49,20 @@ class CommandControllerTest {
     }
 
     @Test
+    void listsMusicDirectoriesWithTheFixedCommand() throws Exception {
+        var command = "find /home/thomas/muziek/ -mindepth 2 -type d -printf '%P\\n'";
+        when(commandService.execute(command)).thenReturn(new CommandResult("album/track\n", 0));
+
+        mvc.perform(post("/api/commands/music-directories").with(jwt())
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.output").value("album/track\n"))
+                .andExpect(jsonPath("$.exitCode").value(0));
+
+        verify(commandService).execute(command);
+    }
+
+    @Test
     void returnsCommandOutputAndNonzeroExitCode() throws Exception {
         when(commandService.execute("touch \"$(date \"+%F %T\")\""))
                 .thenReturn(new CommandResult("Permission denied\n", 1));
