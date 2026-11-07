@@ -33,50 +33,16 @@ De Keycloak-library gebruikt hiervoor de Web Crypto API van de browser.
 Die is alleen beschikbaar in een *secure context*: HTTPS, of HTTP op
 localhost voor lokale ontwikkeling.
 
-## Deployen met Podman
+## Deployen met Podman Compose
 
-Gebruik op de Pi een losse rootless container op netwerk `pi-app`.
-Stel de [HTTPS-proxy](../proxy/README.md) in en volg de
-[Keycloak-handleiding](../keycloak/README.md) voor de Keycloak-container en
-clientinstellingen. Maak vooraf het
-[gedeelde Podman-netwerk](../README.md#gedeeld-podman-netwerk) aan en start de
-[backend](../backend/README.md#container-met-podman).
-De onderstaande commando's gaan uit van een eerste start, zonder bestaande
-frontendcontainer.
-
-Bouw en start vanuit `frontend`:
-
-```sh
-podman build -t localhost/pi-frontend . &&
-podman run -d --replace --name pi-frontend \
-  --network pi-app \
-  -p 127.0.0.1:8081:8080 \
-  -e BACKEND_URL=http://pi-backend:8080 \
-  localhost/pi-frontend
-```
-
-Open `https://pi.thomasmichels.nl`; de interne HTTP-poort is niet bereikbaar
-vanaf het LAN, want `-p 127.0.0.1:8081:8080` bindt deze alleen aan het
-binnen de Pi. De HTTPS-proxy draait met `--network host` en kan daardoor
-de frontend via `127.0.0.1:8081` bereiken. Andere apparaten verbinden via
-HTTPS met de proxy, die het verzoek intern doorstuurt naar de frontend.
-Configureer de exacte redirect-, logout- en web-originwaarden in Keycloak
-volgens de Keycloak-handleiding.
-
-`BACKEND_URL` bevat het backendadres met protocol en poort, zonder pad of
-afsluitende slash. Nginx stuurt `/api` door naar dit adres.
-Podman vertaalt `pi-backend` binnen `pi-app` naar de backendcontainer.
-Daardoor hoeft de backend geen poort op de Pi te publiceren.
-
-### Bijwerken
-
-```sh
-podman build -t localhost/pi-frontend . &&
-podman stop pi-frontend &&
-podman rm pi-frontend
-```
-
-Voer daarna het startcommando opnieuw uit.
+De frontend draait als rootless Compose-service `pi-frontend`. Compose bouwt
+de container en verbindt die met de backend op het interne netwerk. Alleen
+`127.0.0.1:8081` wordt op de Pi gepubliceerd; de HTTPS-proxy bereikt de
+frontend daar en biedt hem aan op `https://pi.thomasmichels.nl`. Start of
+bouw de services volgens de
+[root-README](../README.md#applicaties-starten-met-podman-compose).
+Configureer de redirect-, logout- en web-originwaarden in Keycloak volgens
+de [Keycloak-handleiding](../keycloak/README.md).
 
 ## Build en tests
 

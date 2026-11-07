@@ -6,10 +6,10 @@ en Keycloak worden afzonderlijk ingericht: volg daarvoor de
 [Keycloak](../keycloak/README.md)-handleidingen. Start die services voordat je
 de proxy controleert.
 
-| HTTPS-adres | Nginx-bestemming op de Pi |
-|---|---|
-| `https://pi.thomasmichels.nl` | Frontend op `127.0.0.1:8081` |
-| `https://login.thomasmichels.nl` | Keycloak op `127.0.0.1:9000` |
+| HTTPS-adres                       | Nginx-bestemming op de Pi    |
+|-----------------------------------|------------------------------|
+| `https://pi.thomasmichels.nl`     | Frontend op `127.0.0.1:8081` |
+| `https://login.thomasmichels.nl`  | Keycloak op `127.0.0.1:9000` |
 
 Nginx stuurt HTTP-verzoeken met status 308 door naar HTTPS. De backend wordt
 via de frontend gebruikt en heeft geen proxyroute.
@@ -35,10 +35,10 @@ sudo certbot certonly \
 Voeg de door Certbot opgegeven TXT-records toe bij je DNS-provider. Voor deze
 domeinen gebruiken we Cloudflare:
 
-| Naam in Cloudflare | Volledige recordnaam |
-|---|---|
-| `_acme-challenge.login` | `_acme-challenge.login.thomasmichels.nl` |
-| `_acme-challenge.pi` | `_acme-challenge.pi.thomasmichels.nl` |
+| Naam in Cloudflare       | Volledige recordnaam                       |
+|--------------------------|--------------------------------------------|
+| `_acme-challenge.login`  | `_acme-challenge.login.thomasmichels.nl`   |
+| `_acme-challenge.pi`     | `_acme-challenge.pi.thomasmichels.nl`      |
 
 Bevestig een controle pas in Certbot nadat de waarde publiek zichtbaar is:
 
@@ -92,24 +92,27 @@ map wilt.
 
 ## Nginx controleren en starten
 
-Controleer eerst of poorten 80 en 443 vrij zijn:
+Start de proxy samen met de andere services via de
+[root-README](../README.md#applicaties-starten-met-podman-compose). De service
+gebruikt `network_mode: host`, zodat Nginx de loopbackpoorten van de frontend
+en Keycloak bereikt en het echte client-IP ziet. Er is geen poortpublicatie
+nodig.
+
+Als je alleen de proxy wilt controleren of herstarten, gebruik Compose vanuit
+de repositoryroot. Controleer eerst of poorten 80 en 443 vrij zijn:
 
 ```sh
 ss -ltn '( sport = :80 or sport = :443 )'
 ```
 
-De proxy gebruikt `network_mode: host`, zodat Nginx de loopbackpoorten van
-de frontend en Keycloak bereikt en het echte client-IP ziet. Er is geen
-poortpublicatie nodig.
-
-Controleer de configuratie; dit start geen blijvende proxy:
+Controleer de configuratie:
 
 ```sh
 podman-compose run --rm pi-proxy nginx -t
 ```
 
-Ga alleen verder bij `syntax is ok` en `test is successful`. Start de proxy,
-eventueel samen met de andere services:
+Ga alleen verder bij `syntax is ok` en `test is successful`. Start of herstart
+de proxy met:
 
 ```sh
 podman-compose up -d pi-proxy
@@ -135,12 +138,12 @@ De handmatige DNS-methode vernieuwt certificaten niet automatisch. Controleer
 de geldigheid met `sudo certbot certificates` en vraag vóór het verlopen op
 dezelfde manier een nieuw certificaat aan. Kopieer het daarna opnieuw met de
 `install`-commando's uit [Rootless inrichten](#rootless-inrichten). Laat Nginx
-na vernieuwing of een wijziging aan `nginx.conf` de configuratie en certificaten opnieuw
-inlezen:
+na vernieuwing of een wijziging aan `nginx.conf` de configuratie en
+certificaten opnieuw inlezen:
 
 ```sh
-podman exec pi-proxy nginx -t &&
-podman exec pi-proxy nginx -s reload
+podman-compose exec pi-proxy nginx -t &&
+podman-compose exec pi-proxy nginx -s reload
 ```
 
 Nog te regelen: automatisch starten van de proxy na een Pi-herstart

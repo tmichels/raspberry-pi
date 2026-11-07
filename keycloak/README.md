@@ -3,30 +3,14 @@
 ## Starten achter de HTTPS-proxy
 
 Volg de [HTTPS-handleiding](../proxy/README.md) voor certificaten, Nginx
-en lokale naamherkenning. Keycloak draait als losse rootless container;
-de proxy bereikt hem via een loopbackpoort op de Pi.
+en lokale naamherkenning. Keycloak draait als rootless Compose-service en de
+proxy bereikt hem via een loopbackpoort op de Pi. Start alle services volgens
+de [root-README](../README.md#applicaties-starten-met-podman-compose).
 
-Voer op de Pi, uit bij een bestaande adminaccount in
-volume `keycloak-data` en een vrije containernaam:
-
-```sh
-podman run -d --name keycloak \
-  -p 127.0.0.1:9000:8080 \
-  -v keycloak-data:/opt/keycloak/data \
-  -v /usr/share/zoneinfo/Europe/Amsterdam:/etc/localtime:ro \
-  -e TZ=Europe/Amsterdam \
-  -e JAVA_OPTS_APPEND=-Duser.timezone=Europe/Amsterdam \
-  -e KC_HTTP_ENABLED=true \
-  -e KC_HOSTNAME=https://login.thomasmichels.nl \
-  -e KC_PROXY_HEADERS=xforwarded \
-  docker.io/keycloak/keycloak:26.8.1 start
-```
-
-Bij een eerste start met een leeg volume zijn deze parameters nodig:
-```sh
-  -e KC_BOOTSTRAP_ADMIN_USERNAME=admin \
-  -e KC_BOOTSTRAP_ADMIN_PASSWORD="$KC_BOOTSTRAP_ADMIN_PASSWORD" \
-```
+Bij een eerste start met een leeg `keycloak-data`-volume moeten
+`KC_BOOTSTRAP_ADMIN_USERNAME` en `KC_BOOTSTRAP_ADMIN_PASSWORD` als
+omgevingsvariabelen zijn ingesteld wanneer Compose wordt gestart. Deze
+bootstrap-instellingen worden alleen gebruikt om de eerste admin aan te maken.
 
 Open `https://login.thomasmichels.nl/admin/`. Nginx handelt HTTPS af en
 geeft het oorspronkelijke protocol door via `X-Forwarded-Proto`.
@@ -42,17 +26,30 @@ toegangsregels.
 
 Configureer in de Keycloak Admin Console realm `donna`, client `pi`:
 
-| Instelling | Waarde |
-|---|---|
-| Client type | OpenID Connect |
-| Client authentication | Off (publieke client, geen secret in React) |
-| Standard flow | On |
-| Implicit flow | Off |
-| Direct access grants | Off |
-| PKCE Code Challenge Method (Advanced) | S256 |
-| Valid redirect URIs | `https://pi.thomasmichels.nl`, `https://pi.thomasmichels.nl/`, `http://localhost:5173`, `http://localhost:5173/`, `http://localhost:4173` en `http://localhost:4173/` |
-| Valid post logout redirect URIs | Dezelfde URL's als hierboven |
-| Web origins | `https://pi.thomasmichels.nl`, `http://localhost:5173` en `http://localhost:4173` |
+| Instelling                            | Waarde                          |
+|---------------------------------------|---------------------------------|
+| Client type                           | OpenID Connect                  |
+| Client authentication                 | Off (public client)             |
+| Standard flow                         | On                              |
+| Implicit flow                         | Off                             |
+| Direct access grants                  | Off                             |
+| PKCE Code Challenge Method (Advanced) | S256                            |
+| Valid redirect URIs                   | Zie de URI-lijst hieronder      |
+| Valid post logout redirect URIs       | Dezelfde URI's als hierboven    |
+| Web origins                           | Zie de lijst hieronder          |
+
+Gebruik voor **Valid redirect URIs** en **Valid post logout redirect URIs**
+deze URL's:
+
+- `https://pi.thomasmichels.nl` en `https://pi.thomasmichels.nl/`
+- `http://localhost:5173` en `http://localhost:5173/`
+- `http://localhost:4173` en `http://localhost:4173/`
+
+Stel **Web origins** in op:
+
+- `https://pi.thomasmichels.nl`
+- `http://localhost:5173`
+- `http://localhost:4173`
 
 Gebruik expliciete URL's, geen wildcard `*`. De frontend gebruikt zijn eigen
 origin als login- en logoutcallback. Maak een gebruiker in realm `donna`
@@ -76,11 +73,15 @@ Maak een Audience-mapper voor client `pi`:
 4. Geef de mapper een herkenbare naam, bijvoorbeeld `pi-audience`, en stel
    de onderstaande waarden in. Klik daarna op **Save**.
 
-| Instelling | Waarde | Betekenis |
-|---|---|---|
-| Included Client Audience | `pi` | Voegt `pi` toe aan het `aud`-veld. |
-| Add to access token | On | Past de instelling toe op het token waarmee de frontend de API aanroept. |
-| Add to ID token | Off | Het ID token beschrijft de ingelogde gebruiker en wordt niet gebruikt voor API-verzoeken. |
+Stel de mapper als volgt in:
+
+- **Included Client Audience:** `pi`
+- **Add to access token:** On
+- **Add to ID token:** Off
+
+De audience wordt toegevoegd aan het access token waarmee de frontend de API
+aanroept. Het ID token beschrijft de ingelogde gebruiker en wordt niet voor
+API-verzoeken gebruikt.
 
 Door de mapper onder **pi-dedicated** te plaatsen wordt hij automatisch
 toegepast bij het inloggen met client `pi`. Plaats hem niet uitsluitend in
@@ -90,16 +91,17 @@ met HTTP 401, ook als de gebruiker wel is ingelogd. Log na het wijzigen opnieuw
 in om een nieuw token met de audience te krijgen.
 
 Stel de Keycloak-URL en issuer in zoals beschreven in de
-[frontend](../frontend/README.md) en [backend](../backend/README.md)-handleidingen.
+[frontend](../frontend/README.md)- en
+[backend](../backend/README.md)-handleidingen.
 
 ## HTTP en HTTPS
 
 Voor lokale ontwikkeling kun je de frontend openen via
 `http://localhost:5173`: localhost geldt als secure context in de
-browser. Een frontend op `http://<lan-ip>:8081` of `http://<lan-ip>:5173` is dat
-niet; de Keycloak-adapter heeft de Web Crypto API nodig voor PKCE en werkt daar
-niet. Voor toegang vanaf je telefoon of een andere computer moet de frontend
-via HTTPS met een vertrouwd certificaat worden aangeboden.
+browser. Een frontend op `http://<lan-ip>:8081` of `http://<lan-ip>:5173` is
+dat niet; de Keycloak-adapter heeft de Web Crypto API nodig voor PKCE en werkt
+daar niet. Voor toegang vanaf je telefoon of een andere computer moet de
+frontend via HTTPS met een vertrouwd certificaat worden aangeboden.
 
 De proxyopzet biedt frontend en Keycloak beide via HTTPS aan.
 Een HTTPS-frontend kan geen HTTP-Keycloak gebruiken vanwege mixed-content-

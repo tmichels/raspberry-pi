@@ -1,12 +1,12 @@
 # Afstandsbediening
 
-De Argon ONE V3 infrarood ontvanger zet het infraroodsignaal van de afstandsbediening om in
-elektrische pulsen. De **Linux IR-driver** (`gpio_ir_recv`) leest die pulsen
-via GPIO 23 en geeft ze door aan de IR-onderdelen van de Linux-kernel.
+De Argon ONE V3-infraroodontvanger zet het signaal van de afstandsbediening
+om in elektrische pulsen. De **Linux IR-driver** (`gpio_ir_recv`) leest die
+pulsen via GPIO 23 en geeft ze door aan de IR-onderdelen van de Linux-kernel.
 Die herkennen het protocol en de knopcode (scancode).
 
-Met **`ir-keytable`** vertellen we Linux welke scancode bij welke toets hoort. We
-kunnen er ook mee controleren of een knop wordt ontvangen. Het programma
+Met **`ir-keytable`** vertellen we Linux welke scancode bij welke toets hoort.
+We kunnen er ook mee controleren of een knop wordt ontvangen. Het programma
 hoeft niet open te blijven: Linux blijft daarna zelf naar de ontvanger
 luisteren.
 
@@ -16,7 +16,8 @@ knopkoppeling in en `triggerhappy` voert de actie uit.
 
 ## IR-ontvanger
 
-In `/boot/firmware/config.txt` voeg je toe dat GPIO 23 een IR ontvanger is. Zet onder `[all]`:
+Voeg in `/boot/firmware/config.txt` toe dat GPIO 23 een IR-ontvanger is.
+Zet onder `[all]`:
 
 ```ini
 dtoverlay=gpio-ir,gpio_pin=23
@@ -24,7 +25,8 @@ dtoverlay=gpio-ir,gpio_pin=23
 
 ## Knop koppelen
 
-Met de volgende opdracht worden de scancodes van de afstandsbediening getoond als je een knop indrukt:
+Met de volgende opdracht worden de scancodes getoond wanneer je een knop
+indrukt:
 
 ```bash
 thomas@raspberrypi:~$ ir-keytable -s rc0 -p all -t
@@ -33,8 +35,8 @@ thomas@raspberrypi:~$ ir-keytable -s rc0 -p all -t
 3155.326019: event type EV_SYN(0x00).
 ```
 
-De knop gaf protocol `sharp` en scancode `0xcd1`. De koppeling kan worden vastgelegd
-in `/etc/rc_keymaps/argon.toml`:
+De knop gaf protocol `sharp` en scancode `0xcd1`. Leg de koppeling vast in
+`/etc/rc_keymaps/argon.toml`:
 
 ```toml
 [[protocols]]
@@ -75,13 +77,19 @@ een override ingesteld zodat de dienst scripts als `thomas` uitvoert:
 ```ini
 [Service]
 ExecStart=
-ExecStart=/usr/sbin/thd --triggers /etc/triggerhappy/triggers.d/ --socket /run/thd.socket --user thomas --deviceglob /dev/input/event*
+ExecStart=/usr/sbin/thd \
+  --triggers /etc/triggerhappy/triggers.d/ \
+  --socket /run/thd.socket \
+  --user thomas \
+  --deviceglob /dev/input/event*
 ```
 
-Voeg in `/etc/triggerhappy/triggers.d/ir-test.conf` de koppeling tussen de toets en het script toe:
+Voeg in `/etc/triggerhappy/triggers.d/ir-test.conf` de koppeling tussen de
+toets en het script toe:
 
 ```text
 KEY_F13 1 /home/thomas/ir-test.sh
 ```
 
-Herstart daarna de triggerhappy service: `sudo systemctl restart triggerhappy.service`.
+Herstart daarna de triggerhappy-service:
+`sudo systemctl restart triggerhappy.service`.
