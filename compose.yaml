@@ -25,7 +25,6 @@ services:
     image: localhost/pi-backend
     container_name: pi-backend
     restart: unless-stopped
-    userns_mode: keep-id:uid=10001,gid=10001
     extra_hosts:
       - login.thomasmichels.nl:host-gateway
     environment:

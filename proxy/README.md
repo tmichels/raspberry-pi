@@ -89,6 +89,7 @@ Ga alleen verder bij `syntax is ok` en `test is successful`:
 
 ```sh
 sudo podman run -d --name pi-proxy \
+  --replace \
   --network host \
   -v /usr/share/zoneinfo/Europe/Amsterdam:/etc/localtime:ro \
   -e TZ=Europe/Amsterdam \
