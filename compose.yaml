@@ -57,4 +57,4 @@ volumes:
 
 networks:
   pi-app:
-    external: true
+    name: pi-app

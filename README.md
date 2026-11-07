@@ -26,11 +26,10 @@ verbinding pas als alle services actief zijn.
 ## Applicaties starten met Podman Compose
 Je kunt alle rootless containers (Keycloak, backend en frontend) tegelijk starten
 met podman-compose in plaats van ze allemaal apart op te starten.
-Maak het gedeelde netwerk eenmalig aan als dat nog niet bestaat, en voer daarna vanuit
-de repositoryroot uit:
+Compose maakt het gedeelde netwerk `pi-app` aan als het nog niet bestaat.
+Voer vanuit de repositoryroot uit:
 
 ```sh
-podman network create pi-app
 podman-compose up -d --build
 ```
 
@@ -39,9 +38,13 @@ Start de proxy daarna apart volgens de
 
 ## Gedeeld Podman-netwerk
 
-Maak op de Pi het netwerk voor frontend en backend eenmalig aan als het nog
-niet bestaat. Doe dit als dezelfde gebruiker die deze
-containers start, voordat je de containers aanmaakt:
+Bij gebruik van Compose wordt `pi-app` automatisch aangemaakt en beheerd.
+Bij `podman-compose down` wordt het netwerk ook verwijderd als er geen
+containers meer aan gekoppeld zijn.
+
+Als je de losse `podman run`-commando's uit de handleidingen gebruikt, maak
+dan op de Pi het netwerk eenmalig aan als het nog niet bestaat. Doe dit als
+dezelfde gebruiker die deze containers start, voordat je de containers aanmaakt:
 
 ```sh
 podman network create pi-app
