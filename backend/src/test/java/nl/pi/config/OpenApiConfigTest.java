@@ -31,6 +31,12 @@ class OpenApiConfigTest {
                         + ".content['application/json']").exists())
                 .andExpect(jsonPath("$.paths['/api/commands/music-directories'].post.responses['500']"
                         + ".content['application/problem+json']").exists())
+                .andExpect(jsonPath("$.paths['/api/music'].get.responses['200']"
+                        + ".content['application/json'].schema['$ref']").value("#/components/schemas/MusicLibrary"))
+                .andExpect(jsonPath("$.paths['/api/music'].get.responses['500']"
+                        + ".content['application/problem+json']").exists())
+                .andExpect(jsonPath("$.components.schemas.MusicLibrary.properties.artists.type").value("array"))
+                .andExpect(jsonPath("$.components.schemas.Track.properties.status.enum[1]").value("MISSING_TAGS"))
                 .andExpect(jsonPath("$.components.schemas.CommandResult.properties.output.type").value("string"))
                 .andExpect(jsonPath("$.components.schemas.CommandResult.properties.exitCode.type").value("integer"))
                 .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.scheme").value("bearer"))
