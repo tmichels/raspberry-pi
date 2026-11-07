@@ -108,8 +108,21 @@ class MusicServiceTest {
         var track = artist.albums().getFirst().tracks().getFirst();
 
         assertEquals("First", artist.name());
-        assertEquals("First; Second", track.tags().get("ARTIST"));
-        assertEquals("One; Two", track.tags().get("COMMENT"));
+        assertEquals(Map.of("COMMENT", "One; Two"), track.tags());
+    }
+
+    @Test
+    void movesAlbumTagsToTheAlbumAndMergesDistinctValues() throws Exception {
+        givenFiles("1.wav", "2.wav", "3.wav");
+        givenTags("1.wav", withAlbumTags(List.of("Rock"), "12"));
+        givenTags("2.wav", withAlbumTags(List.of("Rock", "Pop"), "12"));
+        givenTags("3.wav", withAlbumTags(List.of("Metal"), "12"));
+
+        var album = service.getMusic().artists().getFirst().albums().getFirst();
+
+        assertEquals(Map.of("GENRE", "Rock; Pop; Metal", "TRACK_TOTAL", "12"), album.tags());
+        assertEquals(3, album.tracks().size());
+        album.tracks().forEach(track -> assertEquals(Map.of(), track.tags()));
     }
 
     @Test
@@ -152,6 +165,11 @@ class MusicServiceTest {
 
     private void givenTags(String name, Map<String, List<String>> tags) {
         when(tagReader.readTags(DIRECTORY.resolve(name))).thenReturn(tags);
+    }
+
+    private Map<String, List<String>> withAlbumTags(List<String> genres, String trackTotal) {
+        return Map.of("ARTIST", List.of("Artist"), "ALBUM", List.of("Album"), "TITLE", List.of("Title"),
+                "GENRE", genres, "TRACK_TOTAL", List.of(trackTotal));
     }
 
     private Map<String, List<String>> tags(String artist, String album, String title) {

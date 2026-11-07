@@ -15,10 +15,15 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Slf4j
 @Service
@@ -28,6 +33,8 @@ public class MusicService {
     private static final String UNKNOWN_ARTIST = "Onbekende artiest";
     private static final String UNKNOWN_ALBUM = "Onbekend album";
     private static final List<String> REQUIRED_TAGS = List.of("ARTIST", "ALBUM", "TITLE");
+    private static final Set<String> ALBUM_TAGS = Set.of("GENRE", "TRACK_TOTAL", "COVER_ART");
+    private static final String VALUE_SEPARATOR = "; ";
 
     private final MusicProperties properties;
     private final MusicFileRepository fileRepository;
@@ -41,6 +48,8 @@ public class MusicService {
             var artist = findOrAddArtist(artists, firstValue(tags, "ARTIST", UNKNOWN_ARTIST));
             var album = findOrAddAlbum(artist, firstValue(tags, "ALBUM", UNKNOWN_ALBUM));
             album.tracks().add(toTrack(audioFile, tags));
+            selectTags(tags, ALBUM_TAGS::contains)
+                    .forEach((key, value) -> album.tags().merge(key, value, this::mergeValues));
         }
         artists.sort(Comparator.comparing(Artist::name));
         artists.forEach(artist -> artist.albums().sort(Comparator.comparing(Album::name)));
@@ -63,7 +72,7 @@ public class MusicService {
                 .filter(album -> album.name().equals(name))
                 .findFirst()
                 .orElseGet(() -> {
-                    var album = new Album(name, new ArrayList<>());
+                    var album = new Album(name, new TreeMap<>(), new ArrayList<>());
                     artist.albums().add(album);
                     return album;
                 });
@@ -82,7 +91,7 @@ public class MusicService {
         var missingTags = REQUIRED_TAGS.stream().filter(key -> !tags.containsKey(key)).toList();
         var status = missingTags.isEmpty() ? TrackStatus.OK : TrackStatus.MISSING_TAGS;
         var title = firstValue(tags, "TITLE", path.getFileName().toString());
-        return new Track(title, relativePath(path), status, missingTags, joinValues(tags));
+        return new Track(title, relativePath(path), status, missingTags, selectTags(tags, key -> !REQUIRED_TAGS.contains(key) && !ALBUM_TAGS.contains(key)));
     }
 
     private String relativePath(Path path) {
@@ -93,9 +102,19 @@ public class MusicService {
         return tags.getOrDefault(key, List.of()).stream().findFirst().orElse(defaultValue);
     }
 
-    private Map<String, String> joinValues(Map<String, List<String>> tags) {
-        var joined = new TreeMap<String, String>();
-        tags.forEach((key, values) -> joined.put(key, String.join("; ", values)));
-        return Map.copyOf(joined);
+    private Map<String, String> selectTags(Map<String, List<String>> tags, Predicate<String> filter) {
+        var selected = new TreeMap<String, String>();
+        tags.forEach((key, values) -> {
+            if (filter.test(key)) {
+                selected.put(key, String.join(VALUE_SEPARATOR, values));
+            }
+        });
+        return selected;
+    }
+
+    private String mergeValues(String existing, String added) {
+        return Stream.concat(Arrays.stream(existing.split(VALUE_SEPARATOR)), Arrays.stream(added.split(VALUE_SEPARATOR)))
+                .distinct()
+                .collect(Collectors.joining(VALUE_SEPARATOR));
     }
 }

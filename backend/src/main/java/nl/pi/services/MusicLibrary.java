@@ -7,7 +7,7 @@ public record MusicLibrary(List<Artist> artists) {
 
     public record Artist(String name, List<Album> albums) {}
 
-    public record Album(String name, List<Track> tracks) {}
+    public record Album(String name, Map<String, String> tags, List<Track> tracks) {}
 
     public record Track(
             String title,

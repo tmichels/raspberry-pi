@@ -45,21 +45,21 @@ class MusicControllerTest {
     void returnsNestedRecordsAndTrackStatusesWithoutUsingCommands() throws Exception {
         var tracks = List.of(
                 new Track("Title", "track.mp3", TrackStatus.OK, List.of(),
-                        Map.of("ARTIST", "Artist", "GENRE", "Rock")),
+                        Map.of("COMMENT", "Nice")),
                 new Track("missing.mp3", "missing.mp3", TrackStatus.MISSING_TAGS, List.of("TITLE"), Map.of()));
         when(musicService.getMusic()).thenReturn(new MusicLibrary(
-                List.of(new Artist("Artist", List.of(new Album("Album", tracks))))));
+                List.of(new Artist("Artist", List.of(new Album("Album", Map.of("GENRE", "Rock"), tracks))))));
 
         mvc.perform(get("/api/music").with(jwt()))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.artists[0].name").value("Artist"))
                 .andExpect(jsonPath("$.artists[0].albums[0].name").value("Album"))
+                .andExpect(jsonPath("$.artists[0].albums[0].tags.GENRE").value("Rock"))
                 .andExpect(jsonPath("$.artists[0].albums[0].tracks[0].title").value("Title"))
                 .andExpect(jsonPath("$.artists[0].albums[0].tracks[0].path").value("track.mp3"))
                 .andExpect(jsonPath("$.artists[0].albums[0].tracks[0].status").value("OK"))
-                .andExpect(jsonPath("$.artists[0].albums[0].tracks[0].tags.ARTIST").value("Artist"))
-                .andExpect(jsonPath("$.artists[0].albums[0].tracks[0].tags.GENRE").value("Rock"))
+                .andExpect(jsonPath("$.artists[0].albums[0].tracks[0].tags.COMMENT").value("Nice"))
                 .andExpect(jsonPath("$.artists[0].albums[0].tracks[1].status").value("MISSING_TAGS"))
                 .andExpect(jsonPath("$.artists[0].albums[0].tracks[1].missingTags[0]").value("TITLE"));
 

@@ -25,9 +25,7 @@ public class MusicController {
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Toon alle muziektracks gegroepeerd per artiest en album",
-            description = "Leest audiotags uit de ingestelde muziekmap, inclusief submappen. "
-                    + "Alle aanwezige tags staan per track in tags. "
-                    + "Trackstatus: OK of MISSING_TAGS (met missingTags).")
+            description = "Indeling van artiest en album  en overige metadata is op basis van id3v2 tags van de audiobestanden.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Muziekbibliotheek opgehaald.",
                     content = @Content(schema = @Schema(implementation = MusicLibrary.class))),
