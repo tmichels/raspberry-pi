@@ -18,6 +18,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 import static org.mockito.Mockito.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
@@ -43,9 +44,9 @@ class MusicControllerTest {
     @Test
     void returnsNestedRecordsAndTrackStatusesWithoutUsingCommands() throws Exception {
         var tracks = List.of(
-                new Track("Title", "track.mp3", TrackStatus.OK, List.of()),
-                new Track("missing.mp3", "missing.mp3", TrackStatus.MISSING_TAGS, List.of("TITLE")),
-                new Track("broken.mp3", "broken.mp3", TrackStatus.READ_ERROR, List.of()));
+                new Track("Title", "track.mp3", TrackStatus.OK, List.of(),
+                        Map.of("ARTIST", "Artist", "GENRE", "Rock")),
+                new Track("missing.mp3", "missing.mp3", TrackStatus.MISSING_TAGS, List.of("TITLE"), Map.of()));
         when(musicService.getMusic()).thenReturn(new MusicLibrary(
                 List.of(new Artist("Artist", List.of(new Album("Album", tracks))))));
 
@@ -57,9 +58,10 @@ class MusicControllerTest {
                 .andExpect(jsonPath("$.artists[0].albums[0].tracks[0].title").value("Title"))
                 .andExpect(jsonPath("$.artists[0].albums[0].tracks[0].path").value("track.mp3"))
                 .andExpect(jsonPath("$.artists[0].albums[0].tracks[0].status").value("OK"))
+                .andExpect(jsonPath("$.artists[0].albums[0].tracks[0].tags.ARTIST").value("Artist"))
+                .andExpect(jsonPath("$.artists[0].albums[0].tracks[0].tags.GENRE").value("Rock"))
                 .andExpect(jsonPath("$.artists[0].albums[0].tracks[1].status").value("MISSING_TAGS"))
-                .andExpect(jsonPath("$.artists[0].albums[0].tracks[1].missingTags[0]").value("TITLE"))
-                .andExpect(jsonPath("$.artists[0].albums[0].tracks[2].status").value("READ_ERROR"));
+                .andExpect(jsonPath("$.artists[0].albums[0].tracks[1].missingTags[0]").value("TITLE"));
 
         verify(musicService).getMusic();
         verifyNoInteractions(commandService);

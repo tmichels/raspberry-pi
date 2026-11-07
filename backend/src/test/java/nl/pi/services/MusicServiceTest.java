@@ -1,58 +1,62 @@
 package nl.pi.services;
 
 import nl.pi.config.MusicProperties;
+import nl.pi.repositories.AudioReadException;
+import nl.pi.repositories.AudioTagReader;
+import nl.pi.repositories.MusicFileRepository;
+import nl.pi.services.MusicLibrary.Album;
+import nl.pi.services.MusicLibrary.Artist;
+import nl.pi.services.MusicLibrary.Track;
 import nl.pi.services.MusicLibrary.TrackStatus;
-import org.jaudiotagger.audio.AudioFile;
-import org.jaudiotagger.audio.AudioFileIO;
-import org.jaudiotagger.tag.FieldKey;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
-import javax.sound.sampled.AudioFileFormat;
-import javax.sound.sampled.AudioFormat;
-import javax.sound.sampled.AudioInputStream;
-import javax.sound.sampled.AudioSystem;
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.when;
 
+@ExtendWith(MockitoExtension.class)
 class MusicServiceTest {
 
-    @TempDir
-    Path directory;
+    private static final Path DIRECTORY = Path.of("/music");
+
+    @Mock
+    private MusicFileRepository fileRepository;
+
+    @Mock
+    private AudioTagReader tagReader;
 
     private MusicService service;
 
     @BeforeEach
     void setUp() {
-        service = new MusicService(new MusicProperties(directory));
+        service = new MusicService(new MusicProperties(DIRECTORY), fileRepository, tagReader);
     }
 
     @Test
-    void groupsActualAudioTagsRatherThanDirectoryNamesAndSortsResults() throws Exception {
-        createTrack("wrong-artist/wrong-album/02.wav", "Artist A", "Album A", "Second");
-        createTrack("elsewhere/01.WAV", "Artist A", "Album A", "First");
-        createTrack("third.wav", "Artist A", "Album B", "Third");
-        createTrack("fourth.wav", "Artist B", "Album A", "Fourth");
-        Files.writeString(directory.resolve("cover.jpg"), "not music");
-        Files.writeString(directory.resolve("mp3"), "no extension");
-        Files.createDirectory(directory.resolve("folder.mp3"));
+    void groupsByTagsRatherThanDirectoryNamesAndSortsArtistsAndAlbums() throws Exception {
+        givenFiles("wrong/02.wav", "elsewhere/01.wav", "third.wav", "fourth.wav");
+        givenTags("wrong/02.wav", tags("Artist A", "Album A", "Second"));
+        givenTags("elsewhere/01.wav", tags("Artist A", "Album A", "First"));
+        givenTags("third.wav", tags("Artist A", "Album B", "Third"));
+        givenTags("fourth.wav", tags("Artist B", "Album A", "Fourth"));
 
         var artists = service.getMusic().artists();
 
-        assertEquals(List.of("Artist A", "Artist B"), artists.stream().map(MusicLibrary.Artist::name).toList());
+        assertEquals(List.of("Artist A", "Artist B"), artists.stream().map(Artist::name).toList());
         var albums = artists.getFirst().albums();
-        assertEquals(List.of("Album A", "Album B"), albums.stream().map(MusicLibrary.Album::name).toList());
-        assertEquals(List.of("First", "Second"),
-                albums.getFirst().tracks().stream().map(MusicLibrary.Track::title).toList());
-        var track = albums.getFirst().tracks().getFirst();
-        assertEquals("elsewhere/01.WAV", track.path());
+        assertEquals(List.of("Album A", "Album B"), albums.stream().map(Album::name).toList());
+        assertEquals(List.of("Second", "First"), albums.getFirst().tracks().stream().map(Track::title).toList());
+        var track = albums.getFirst().tracks().getLast();
+        assertEquals("elsewhere/01.wav", track.path());
         assertEquals(TrackStatus.OK, track.status());
         assertEquals(List.of(), track.missingTags());
         assertEquals("Fourth", artists.getLast().albums().getFirst().tracks().getFirst().title());
@@ -60,7 +64,8 @@ class MusicServiceTest {
 
     @Test
     void reportsOnlyTheMissingTagsAndKeepsKnownMetadata() throws Exception {
-        createTrack("partial.wav", "Artist", "", "Title");
+        givenFiles("partial.wav");
+        givenTags("partial.wav", Map.of("ARTIST", List.of("Artist"), "TITLE", List.of("Title")));
 
         var artist = service.getMusic().artists().getFirst();
         var album = artist.albums().getFirst();
@@ -74,8 +79,9 @@ class MusicServiceTest {
     }
 
     @Test
-    void reportsAllMissingTagsInAnUntaggedAudioFile() throws Exception {
-        createTrack("untagged.wav", "", "", "");
+    void usesDefaultsAndTheFileNameWhenEveryTagIsMissing() throws Exception {
+        givenFiles("sub/untagged.wav");
+        givenTags("sub/untagged.wav", Map.of());
 
         var artist = service.getMusic().artists().getFirst();
         var album = artist.albums().getFirst();
@@ -84,93 +90,71 @@ class MusicServiceTest {
         assertEquals("Onbekende artiest", artist.name());
         assertEquals("Onbekend album", album.name());
         assertEquals("untagged.wav", track.title());
+        assertEquals("sub/untagged.wav", track.path());
         assertEquals(TrackStatus.MISSING_TAGS, track.status());
         assertEquals(List.of("ARTIST", "ALBUM", "TITLE"), track.missingTags());
     }
 
     @Test
-    void treatsAbsentTagObjectsAndWhitespaceTagsAsMissing() throws Exception {
-        var path = Files.createFile(directory.resolve("track.mp3"));
-        var audioFile = mock(AudioFile.class);
-        try (var reader = mockStatic(AudioFileIO.class)) {
-            reader.when(() -> AudioFileIO.read(path.toFile())).thenReturn(audioFile);
-            var track = service.getMusic().artists().getFirst().albums().getFirst().tracks().getFirst();
-            assertEquals(TrackStatus.MISSING_TAGS, track.status());
-            assertEquals(List.of("ARTIST", "ALBUM", "TITLE"), track.missingTags());
-        }
+    void groupsOnTheFirstValueAndJoinsMultipleValuesWithSemicolons() throws Exception {
+        givenFiles("multi.wav");
+        givenTags("multi.wav", Map.of(
+                "ARTIST", List.of("First", "Second"),
+                "ALBUM", List.of("Album"),
+                "TITLE", List.of("Title"),
+                "COMMENT", List.of("One", "Two")));
 
-        Files.delete(path);
-        createTrack("blank.wav", "  ", "Album", "  ");
-        var track = service.getMusic().artists().getFirst().albums().getFirst().tracks().getFirst();
-        assertEquals(TrackStatus.MISSING_TAGS, track.status());
-        assertEquals(List.of("ARTIST", "TITLE"), track.missingTags());
-        assertEquals("blank.wav", track.title());
+        var artist = service.getMusic().artists().getFirst();
+        var track = artist.albums().getFirst().tracks().getFirst();
+
+        assertEquals("First", artist.name());
+        assertEquals("First; Second", track.tags().get("ARTIST"));
+        assertEquals("One; Two", track.tags().get("COMMENT"));
     }
 
     @Test
-    void keepsUnreadableTracksAlongsideReadableTracks() throws Exception {
-        Files.writeString(directory.resolve("broken.mp3"), "not an MP3 file");
-        createTrack("valid.wav", "Artist", "Album", "Title");
+    void treatsUnreadableTracksAsTracksWithoutTags() throws Exception {
+        givenFiles("broken.mp3", "valid.wav");
+        when(tagReader.readTags(DIRECTORY.resolve("broken.mp3")))
+                .thenThrow(new AudioReadException(DIRECTORY.resolve("broken.mp3"), new IOException()));
+        givenTags("valid.wav", tags("Artist", "Album", "Title"));
 
         var artists = service.getMusic().artists();
+
         assertEquals(2, artists.size());
         assertEquals(TrackStatus.OK, artists.getFirst().albums().getFirst().tracks().getFirst().status());
         var track = artists.getLast().albums().getFirst().tracks().getFirst();
+        assertEquals("Onbekende artiest", artists.getLast().name());
         assertEquals("broken.mp3", track.title());
-        assertEquals("broken.mp3", track.path());
-        assertEquals(TrackStatus.READ_ERROR, track.status());
-        assertEquals(List.of(), track.missingTags());
+        assertEquals(TrackStatus.MISSING_TAGS, track.status());
+        assertEquals(List.of("ARTIST", "ALBUM", "TITLE"), track.missingTags());
+        assertEquals(Map.of(), track.tags());
     }
 
     @Test
-    void returnsAnEmptyLibraryForAnEmptyDirectory() throws IOException {
+    void returnsAnEmptyLibraryWhenThereAreNoFiles() throws Exception {
+        when(fileRepository.findAudioFiles()).thenReturn(List.of());
+
         assertEquals(new MusicLibrary(List.of()), service.getMusic());
     }
 
     @Test
-    void scansAgainOnEachRequest() throws Exception {
-        assertTrue(service.getMusic().artists().isEmpty());
-        createTrack("new.wav", "Artist", "Album", "New");
-        assertEquals(1, service.getMusic().artists().size());
+    void propagatesDirectoryErrors() throws Exception {
+        when(fileRepository.findAudioFiles()).thenThrow(new IOException("Map ontbreekt"));
+
+        assertThrows(IOException.class, service::getMusic);
     }
 
-    @Test
-    void doesNotFollowSymbolicFilesOrDirectories() throws Exception {
-        var target = createTrack("original/track.wav", "Artist", "Album", "Title");
-        Files.createSymbolicLink(directory.resolve("alias.wav"), target);
-        Files.createSymbolicLink(directory.resolve("alias-directory"), target.getParent());
-
-        var tracks = service.getMusic().artists().getFirst().albums().getFirst().tracks();
-
-        assertEquals(1, tracks.size());
-        assertEquals("original/track.wav", tracks.getFirst().path());
+    private void givenFiles(String... names) throws IOException {
+        when(fileRepository.findAudioFiles()).thenReturn(
+                java.util.Arrays.stream(names).map(DIRECTORY::resolve).toList());
     }
 
-    @Test
-    void reportsMissingDirectoriesAndPathsThatAreNotDirectories() throws IOException {
-        var missingService = new MusicService(new MusicProperties(directory.resolve("missing")));
-        assertThrows(IOException.class, missingService::getMusic);
-
-        var file = Files.createFile(directory.resolve("file"));
-        var fileService = new MusicService(new MusicProperties(file));
-        assertThrows(IOException.class, fileService::getMusic);
+    private void givenTags(String name, Map<String, List<String>> tags) {
+        when(tagReader.readTags(DIRECTORY.resolve(name))).thenReturn(tags);
     }
 
-    private Path createTrack(String name, String artist, String album, String title) throws Exception {
-        var path = directory.resolve(name);
-        Files.createDirectories(path.getParent());
-        var format = new AudioFormat(8000, 16, 1, true, false);
-        try (var audio = new AudioInputStream(new ByteArrayInputStream(new byte[16000]), format, 8000)) {
-            AudioSystem.write(audio, AudioFileFormat.Type.WAVE, path.toFile());
-        }
-        if (!artist.isEmpty() || !album.isEmpty() || !title.isEmpty()) {
-            var audioFile = AudioFileIO.read(path.toFile());
-            var tag = audioFile.getTagOrCreateAndSetDefault();
-            tag.setField(FieldKey.ARTIST, artist);
-            tag.setField(FieldKey.ALBUM, album);
-            tag.setField(FieldKey.TITLE, title);
-            AudioFileIO.write(audioFile);
-        }
-        return path;
+    private Map<String, List<String>> tags(String artist, String album, String title) {
+        return Map.of("ARTIST", List.of(artist), "ALBUM", List.of(album), "TITLE", List.of(title));
     }
 }

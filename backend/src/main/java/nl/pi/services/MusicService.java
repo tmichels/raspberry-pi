@@ -3,34 +3,22 @@ package nl.pi.services;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import nl.pi.config.MusicProperties;
+import nl.pi.repositories.AudioReadException;
+import nl.pi.repositories.AudioTagReader;
+import nl.pi.repositories.MusicFileRepository;
 import nl.pi.services.MusicLibrary.Album;
 import nl.pi.services.MusicLibrary.Artist;
 import nl.pi.services.MusicLibrary.Track;
 import nl.pi.services.MusicLibrary.TrackStatus;
-import org.jaudiotagger.audio.AudioFileIO;
-import org.jaudiotagger.audio.SupportedFileFormat;
-import org.jaudiotagger.audio.exceptions.CannotReadException;
-import org.jaudiotagger.audio.exceptions.InvalidAudioFrameException;
-import org.jaudiotagger.audio.exceptions.ReadOnlyFileException;
-import org.jaudiotagger.tag.FieldKey;
-import org.jaudiotagger.tag.Tag;
-import org.jaudiotagger.tag.TagException;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.nio.file.Files;
-import java.nio.file.NotDirectoryException;
 import java.nio.file.Path;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeMap;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -39,77 +27,75 @@ public class MusicService {
 
     private static final String UNKNOWN_ARTIST = "Onbekende artiest";
     private static final String UNKNOWN_ALBUM = "Onbekend album";
-    private static final Set<String> AUDIO_EXTENSIONS = Arrays.stream(SupportedFileFormat.values())
-            .map(SupportedFileFormat::getFilesuffix)
-            .collect(Collectors.toUnmodifiableSet());
+    private static final List<String> REQUIRED_TAGS = List.of("ARTIST", "ALBUM", "TITLE");
 
     private final MusicProperties properties;
+    private final MusicFileRepository fileRepository;
+    private final AudioTagReader tagReader;
 
     public MusicLibrary getMusic() throws IOException {
-        Map<String, Map<String, List<Track>>> artists = new TreeMap<>();
-        for (var path : findTracks()) {
-            var taggedTrack = readTrack(path);
-            artists.computeIfAbsent(taggedTrack.artist(), _ -> new TreeMap<>())
-                    .computeIfAbsent(taggedTrack.album(), _ -> new ArrayList<>())
-                    .add(taggedTrack.track());
+        List<Artist> artists = new ArrayList<>();
+        List<Path> audioFiles = fileRepository.findAudioFiles();
+        for (var audioFile : audioFiles) {
+            var tags = readTags(audioFile);
+            var artist = findOrAddArtist(artists, firstValue(tags, "ARTIST", UNKNOWN_ARTIST));
+            var album = findOrAddAlbum(artist, firstValue(tags, "ALBUM", UNKNOWN_ALBUM));
+            album.tracks().add(toTrack(audioFile, tags));
         }
-        return new MusicLibrary(artists.entrySet().stream()
-                .map(artist -> new Artist(artist.getKey(), artist.getValue().entrySet().stream()
-                        .map(album -> new Album(album.getKey(), List.copyOf(album.getValue())))
-                        .toList()))
-                .toList());
+        artists.sort(Comparator.comparing(Artist::name));
+        artists.forEach(artist -> artist.albums().sort(Comparator.comparing(Album::name)));
+        return new MusicLibrary(artists);
     }
 
-    private List<Path> findTracks() throws IOException {
-        var directory = properties.directory();
-        if (!Files.readAttributes(directory, BasicFileAttributes.class).isDirectory()) {
-            throw new NotDirectoryException(directory.toString());
-        }
-        try (var paths = Files.find(directory, Integer.MAX_VALUE,
-                (path, attributes) -> attributes.isRegularFile() && isAudioFile(path))) {
-            return paths.sorted().toList();
-        } catch (UncheckedIOException exception) {
-            throw exception.getCause();
-        }
+    private Artist findOrAddArtist(List<Artist> artists, String name) {
+        return artists.stream()
+                .filter(artist -> artist.name().equals(name))
+                .findFirst()
+                .orElseGet(() -> {
+                    var artist = new Artist(name, new ArrayList<>());
+                    artists.add(artist);
+                    return artist;
+                });
     }
 
-    private boolean isAudioFile(Path path) {
-        var name = path.getFileName().toString();
-        var separator = name.lastIndexOf('.');
-        if (separator < 0) {
-            return false;
-        }
-        var extension = name.substring(separator + 1).toLowerCase(Locale.ROOT);
-        return AUDIO_EXTENSIONS.contains(extension);
+    private Album findOrAddAlbum(Artist artist, String name) {
+        return artist.albums().stream()
+                .filter(album -> album.name().equals(name))
+                .findFirst()
+                .orElseGet(() -> {
+                    var album = new Album(name, new ArrayList<>());
+                    artist.albums().add(album);
+                    return album;
+                });
     }
 
-    private TaggedTrack readTrack(Path path) {
-        var relativePath = properties.directory().relativize(path).toString();
+    private Map<String, List<String>> readTags(Path path) {
         try {
-            var tag = AudioFileIO.read(path.toFile()).getTag();
-            var missingTags = new ArrayList<String>();
-            var artist = readTag(tag, FieldKey.ARTIST, UNKNOWN_ARTIST, missingTags);
-            var album = readTag(tag, FieldKey.ALBUM, UNKNOWN_ALBUM, missingTags);
-            var title = readTag(tag, FieldKey.TITLE, path.getFileName().toString(), missingTags);
-            var status = missingTags.isEmpty() ? TrackStatus.OK : TrackStatus.MISSING_TAGS;
-            return new TaggedTrack(artist, album,
-                    new Track(title, relativePath, status, List.copyOf(missingTags)));
-        } catch (IOException | CannotReadException | TagException
-                 | ReadOnlyFileException | InvalidAudioFrameException exception) {
-            log.warn("Muziekbestand kon niet worden gelezen: {}", relativePath, exception);
-            return new TaggedTrack(UNKNOWN_ARTIST, UNKNOWN_ALBUM,
-                    new Track(path.getFileName().toString(), relativePath, TrackStatus.READ_ERROR, List.of()));
+            return tagReader.readTags(path);
+        } catch (AudioReadException exception) {
+            log.warn("Tags konden niet gelezen worden: {}", relativePath(path), exception);
+            return Map.of();
         }
     }
 
-    private String readTag(Tag tag, FieldKey key, String fallback, List<String> missingTags) {
-        var value = tag == null ? "" : tag.getFirst(key).strip();
-        if (value.isEmpty()) {
-            missingTags.add(key.name());
-            return fallback;
-        }
-        return value;
+    private Track toTrack(Path path, Map<String, List<String>> tags) {
+        var missingTags = REQUIRED_TAGS.stream().filter(key -> !tags.containsKey(key)).toList();
+        var status = missingTags.isEmpty() ? TrackStatus.OK : TrackStatus.MISSING_TAGS;
+        var title = firstValue(tags, "TITLE", path.getFileName().toString());
+        return new Track(title, relativePath(path), status, missingTags, joinValues(tags));
     }
 
-    private record TaggedTrack(String artist, String album, Track track) {}
+    private String relativePath(Path path) {
+        return properties.directory().relativize(path).toString();
+    }
+
+    private String firstValue(Map<String, List<String>> tags, String key, String defaultValue) {
+        return tags.getOrDefault(key, List.of()).stream().findFirst().orElse(defaultValue);
+    }
+
+    private Map<String, String> joinValues(Map<String, List<String>> tags) {
+        var joined = new TreeMap<String, String>();
+        tags.forEach((key, values) -> joined.put(key, String.join("; ", values)));
+        return Map.copyOf(joined);
+    }
 }

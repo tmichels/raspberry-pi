@@ -54,7 +54,8 @@ groepering en titel; de mapnamen spelen daarbij geen rol.
 Bestanden worden geselecteerd op audio-extensie (hoofdletterongevoelig):
 ogg, oga, mp3, flac, mp4, m4a, m4p, wma, wav, ra, rm, m4b, aif, aiff, aifc,
 dsf en dff. Andere bestanden worden genegeerd. Een formaat dat de lezer
-niet kan verwerken krijgt, net als een beschadigd bestand, `READ_ERROR`.
+niet kan verwerken of een beschadigd bestand wordt behandeld als een bestand
+zonder tags.
 
 Elke track bevat `title`, `path` (relatief aan de muziekmap), `status` en
 `missingTags`. De status is `OK` wanneer alle drie tags aanwezig zijn.
@@ -62,9 +63,8 @@ Bij ontbrekende of lege tags is de status `MISSING_TAGS` en vermeldt
 `missingTags` de ontbrekende velden (`ARTIST`, `ALBUM`, `TITLE`).
 Ontbrekende artiesten/albums worden gegroepeerd onder `Onbekende artiest`
 en `Onbekend album`; bij een ontbrekende titel wordt de bestandsnaam gebruikt.
-Onleesbare bestanden blijven zichtbaar met `READ_ERROR`, de bestandsnaam
-als titel en een lege `missingTags`-lijst omdat de tags niet te beoordelen
-zijn; de oorzaak wordt gelogd.
+Onleesbare bestanden blijven zichtbaar met status `MISSING_TAGS` en de
+bestandsnaam als titel; de oorzaak wordt gelogd.
 
 Een lege muziekmap geeft `{"artists":[]}`. Een ontbrekende of niet leesbare
 map geeft HTTP 500 met een ProblemDetail en een foutmelding in de serverlogs.
