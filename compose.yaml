@@ -1,0 +1,61 @@
+services:
+  keycloak:
+    image: docker.io/keycloak/keycloak:26.8.1
+    container_name: keycloak
+    command: start
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9000:8080"
+    volumes:
+      - keycloak-data:/opt/keycloak/data
+      - /usr/share/zoneinfo/Europe/Amsterdam:/etc/localtime:ro
+    environment:
+      - TZ=Europe/Amsterdam
+      - JAVA_OPTS_APPEND=-Duser.timezone=Europe/Amsterdam
+      - KC_HTTP_ENABLED=true
+      - KC_HOSTNAME=https://login.thomasmichels.nl
+      - KC_PROXY_HEADERS=xforwarded
+      - KC_BOOTSTRAP_ADMIN_USERNAME
+      - KC_BOOTSTRAP_ADMIN_PASSWORD
+    networks:
+      - pi-app
+
+  pi-backend:
+    build: ./backend
+    image: localhost/pi-backend
+    container_name: pi-backend
+    restart: unless-stopped
+    userns_mode: keep-id:uid=10001,gid=10001
+    extra_hosts:
+      - login.thomasmichels.nl:host-gateway
+    environment:
+      - PI_COMMANDS_DIRECTORY=/data
+    volumes:
+      - pi-backend-data:/data
+      - ${MUSIC_DIRECTORY:-/home/thomas/muziek}:/home/thomas/muziek:ro
+    networks:
+      - pi-app
+
+  pi-frontend:
+    build: ./frontend
+    image: localhost/pi-frontend
+    container_name: pi-frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8081:8080"
+    environment:
+      - BACKEND_URL=http://pi-backend:8080
+    depends_on:
+      - pi-backend
+    networks:
+      - pi-app
+
+volumes:
+  keycloak-data:
+    name: keycloak-data
+  pi-backend-data:
+    name: pi-backend-data
+
+networks:
+  pi-app:
+    external: true
