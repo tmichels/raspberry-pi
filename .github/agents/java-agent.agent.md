@@ -1,3 +1,8 @@
+---
+name: java-agent
+description: Gebruik deze agent voor alle Java-, Spring Boot-, Maven-, Lombok- en JUnit-taken, zoals het schrijven, wijzigen, reviewen en testen van Java-code (.java-bestanden).
+---
+
 # Ontwikkelrichtlijnen
 
 ## Techniek
