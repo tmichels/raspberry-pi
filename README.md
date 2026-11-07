@@ -24,17 +24,16 @@ de backend en frontend volgens hun eigen handleidingen. Controleer de volledige
 verbinding pas als alle services actief zijn.
 
 ## Applicaties starten met Podman Compose
-Je kunt alle rootless containers (Keycloak, backend en frontend) tegelijk starten
+Je kunt alle containers tegelijk starten
 met podman-compose in plaats van ze allemaal apart op te starten.
 Compose maakt het gedeelde netwerk `pi-app` aan als het nog niet bestaat.
-Voer vanuit de repositoryroot uit:
+Richt de proxy eerst eenmalig in volgens de
+[proxyhandleiding](proxy/README.md#rootless-inrichten).
+Voer daarna vanuit de repositoryroot uit:
 
 ```sh
 podman-compose up -d --build
 ```
-
-Start de proxy daarna apart volgens de
-[proxyhandleiding](proxy/README.md#nginx-controleren-en-starten).
 
 ## Gedeeld Podman-netwerk
 

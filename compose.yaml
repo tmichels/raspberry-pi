@@ -49,6 +49,18 @@ services:
     networks:
       - pi-app
 
+  pi-proxy:
+    image: docker.io/library/nginx:1.28
+    container_name: pi-proxy
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - TZ=Europe/Amsterdam
+    volumes:
+      - ./proxy/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ${PROXY_CERT_DIRECTORY:-/home/thomas/.local/share/pi-proxy/certs}:/etc/nginx/certs:ro
+      - /usr/share/zoneinfo/Europe/Amsterdam:/etc/localtime:ro
+
 volumes:
   keycloak-data:
     name: keycloak-data
