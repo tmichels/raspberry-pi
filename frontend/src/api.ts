@@ -1,10 +1,5 @@
 import { getAccessToken } from './auth';
 
-export type CommandResult = {
-  output: string;
-  exitCode: number;
-};
-
 export type MusicTrack = {
   title: string;
   path: string;
@@ -40,29 +35,6 @@ async function throwRequestError(response: Response): Promise<never> {
     ? await response.json()
     : {};
   throw new Error(problem.detail || `Request mislukt (HTTP ${response.status}).`);
-}
-
-async function executeCommand(endpoint: string): Promise<CommandResult> {
-  const token = await getAccessToken();
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: '{}',
-    signal: AbortSignal.timeout(10_000),
-  });
-
-  if (!response.ok) {
-    await throwRequestError(response);
-  }
-
-  return response.json();
-}
-
-export function createFile(): Promise<CommandResult> {
-  return executeCommand('/api/commands/touch');
 }
 
 export async function getMusic(): Promise<MusicLibrary> {

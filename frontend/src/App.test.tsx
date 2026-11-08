@@ -16,13 +16,6 @@ afterEach(() => {
   vi.mocked(getAccessToken).mockResolvedValue('access-token');
 });
 
-function clickCreateFile() {
-  render(<App />);
-  const button = screen.getByRole<HTMLButtonElement>('button', { name: 'Bestand aanmaken' });
-  fireEvent.click(button);
-  return button;
-}
-
 function clickGetMusic() {
   render(<App />);
   const button = screen.getByRole<HTMLButtonElement>('button', { name: 'Muziek ophalen' });
@@ -36,29 +29,6 @@ describe('Raspberry Pi bediening', () => {
     expect(screen.getByRole('heading').textContent).toBe('Raspberry Pi bediening');
     expect(screen.getByText('Ingelogd als donna-user.')).toBeDefined();
     expect(screen.getByRole('status').textContent).toBe('');
-  });
-
-  it('posts the fixed action and shows a successful result', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ output: '', exitCode: 0 })),
-    );
-    vi.stubGlobal('fetch', fetchMock);
-    const timeout = vi.spyOn(AbortSignal, 'timeout');
-    const button = clickCreateFile();
-
-    await waitFor(() => {
-      expect(screen.getByRole('status').textContent).toBe(
-        'Commando uitgevoerd.\nExitcode: 0\nOutput:\n(geen output)',
-      );
-    });
-    expect(button.disabled).toBe(false);
-    expect(fetchMock).toHaveBeenCalledExactlyOnceWith('/api/commands/touch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer access-token' },
-      body: '{}',
-      signal: expect.any(AbortSignal),
-    });
-    expect(timeout).toHaveBeenCalledWith(10_000);
   });
 
   it('fetches the music endpoint and lets the user browse the library', async () => {
@@ -209,26 +179,13 @@ describe('Raspberry Pi bediening', () => {
     vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise<Response>((resolve) => {
       finishRequest = resolve;
     })));
-    const button = clickCreateFile();
+    const button = clickGetMusic();
 
     expect(button.disabled).toBe(true);
-    expect(screen.getByRole('status').textContent).toBe('Commando wordt uitgevoerd...');
+    expect(screen.getByRole('status').textContent).toBe('Muziek wordt opgehaald...');
     await waitFor(() => expect(finishRequest).toBeDefined());
-    finishRequest(new Response(JSON.stringify({ output: '', exitCode: 0 })));
+    finishRequest(new Response(JSON.stringify({ artists: [] })));
     await waitFor(() => expect(button.disabled).toBe(false));
-  });
-
-  it('shows output and a nonzero exit code as a failed command', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ output: 'Permission denied\n', exitCode: 1 })),
-    ));
-    clickCreateFile();
-
-    await waitFor(() => {
-      expect(screen.getByRole('status').textContent).toBe(
-        'Commando mislukt.\nExitcode: 1\nOutput:\nPermission denied\n',
-      );
-    });
   });
 
   it('shows the backend problem detail and allows another request', async () => {
@@ -237,7 +194,7 @@ describe('Raspberry Pi bediening', () => {
         status: 500, headers: { 'Content-Type': 'application/problem+json' },
       }),
     ));
-    const button = clickCreateFile();
+    const button = clickGetMusic();
 
     await waitFor(() => {
       expect(screen.getByRole('status').textContent).toBe('Mislukt: Controleer de logs op de Raspberry Pi.');
@@ -249,20 +206,20 @@ describe('Raspberry Pi bediening', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
       new Response('{}', { status: 503 }),
     ));
-    clickCreateFile();
+    clickGetMusic();
 
     await waitFor(() => {
       expect(screen.getByRole('status').textContent).toBe('Mislukt: Request mislukt (HTTP 503).');
     });
   });
 
-  it('warns that the command may have run after a timeout', async () => {
+  it('shows a timeout when retrieving music', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new DOMException('Timed out', 'TimeoutError')));
-    const button = clickCreateFile();
+    const button = clickGetMusic();
 
     await waitFor(() => {
       expect(screen.getByRole('status').textContent).toBe(
-        'Geen antwoord binnen 10 seconden. Het commando kan al zijn uitgevoerd; controleer de Pi.',
+        'Geen antwoord binnen 10 seconden. Probeer het opnieuw.',
       );
     });
     expect(button.disabled).toBe(false);
@@ -270,7 +227,7 @@ describe('Raspberry Pi bediening', () => {
 
   it('shows network failures and enables the button again', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
-    const button = clickCreateFile();
+    const button = clickGetMusic();
 
     await waitFor(() => {
       expect(screen.getByRole('status').textContent).toBe('Mislukt: Failed to fetch');
@@ -282,7 +239,7 @@ describe('Raspberry Pi bediening', () => {
     vi.mocked(getAccessToken).mockRejectedValue(new Error('Je sessie is verlopen.'));
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-    const button = clickCreateFile();
+    const button = clickGetMusic();
 
     await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Mislukt: Je sessie is verlopen.'));
     expect(fetchMock).not.toHaveBeenCalled();
@@ -292,7 +249,7 @@ describe('Raspberry Pi bediening', () => {
   it.each([401, 403])('shows an explicit error for an empty HTTP %s response without retrying', async (status) => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status }));
     vi.stubGlobal('fetch', fetchMock);
-    clickCreateFile();
+    clickGetMusic();
 
     await waitFor(() => expect(screen.getByRole('status').textContent).toContain(`HTTP ${status}`));
     expect(fetchMock).toHaveBeenCalledTimes(1);
