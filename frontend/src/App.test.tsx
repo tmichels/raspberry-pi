@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { getAccessToken, logout } from './auth';
@@ -112,11 +112,96 @@ describe('Raspberry Pi bediening', () => {
     expect(screen.queryByText('Artiest A/Album A/nummer.mp3')).toBeNull();
     expect(screen.getByText('Jazz')).toBeDefined();
     expect(screen.getByText('2024')).toBeDefined();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole('button', { name: '← Albums van Artiest A' }));
     expect(screen.getByRole('button', { name: /Album A/ })).toBeDefined();
     fireEvent.click(screen.getByRole('button', { name: '← Alle artiesten' }));
     expect(screen.getByRole('button', { name: /Artiest A/ })).toBeDefined();
+  });
+
+  it('fetches and displays the cover only when an album with COVER_ART is opened', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        artists: [{
+          name: 'Artiest',
+          albums: [{
+            name: 'Album',
+            path: 'Artiest/Album & meer',
+            tags: { COVER_ART: 'aanwezig', GENRE: 'Jazz' },
+            tracks: [],
+          }],
+        }],
+      })))
+      .mockResolvedValueOnce(new Response('image', { headers: { 'Content-Type': 'image/jpeg' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const createObjectURL = vi.fn().mockReturnValue('blob:album-cover');
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal('URL', class extends URL {
+      static createObjectURL = createObjectURL;
+      static revokeObjectURL = revokeObjectURL;
+    });
+
+    clickGetMusic();
+    fireEvent.click(await screen.findByRole('button', { name: /Artiest/ }));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: /Album/ }));
+
+    const image = await screen.findByRole<HTMLImageElement>('img', { name: 'Albumhoes van Album' });
+    expect(image.getAttribute('src')).toBe('blob:album-cover');
+    expect(screen.getByText('Jazz')).toBeDefined();
+    expect(screen.queryByText('COVER_ART')).toBeNull();
+    expect(screen.queryByText('aanwezig')).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/music/album-art?path=Artiest%2FAlbum%20%26%20meer');
+    expect(fetchMock.mock.calls[1][1].headers).toEqual({ Authorization: 'Bearer access-token' });
+    fireEvent.click(screen.getByRole('button', { name: '← Albums van Artiest' }));
+    expect(revokeObjectURL).toHaveBeenCalledExactlyOnceWith('blob:album-cover');
+  });
+
+  it('shows an error when the album cover cannot be retrieved', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        artists: [{ name: 'Artiest', albums: [{
+          name: 'Album', path: 'Album', tags: { COVER_ART: 'yes' }, tracks: [],
+        }] }],
+      })))
+      .mockResolvedValueOnce(new Response(null, { status: 404 })));
+
+    clickGetMusic();
+    fireEvent.click(await screen.findByRole('button', { name: /Artiest/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Album/ }));
+
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Albumhoes ophalen mislukt: Request mislukt (HTTP 404).',
+    );
+    expect(screen.queryByText('COVER_ART')).toBeNull();
+  });
+
+  it('does not display or allocate a cover when its request completes after leaving the album', async () => {
+    let finishRequest!: (response: Response) => void;
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        artists: [{ name: 'Artiest', albums: [{
+          name: 'Album', path: 'Album', tags: { COVER_ART: 'yes' }, tracks: [],
+        }] }],
+      })))
+      .mockReturnValueOnce(new Promise<Response>((resolve) => { finishRequest = resolve; }));
+    vi.stubGlobal('fetch', fetchMock);
+    const createObjectURL = vi.fn();
+    vi.stubGlobal('URL', class extends URL {
+      static createObjectURL = createObjectURL;
+    });
+
+    clickGetMusic();
+    fireEvent.click(await screen.findByRole('button', { name: /Artiest/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Album/ }));
+    await waitFor(() => expect(finishRequest).toBeDefined());
+    fireEvent.click(screen.getByRole('button', { name: '← Albums van Artiest' }));
+    await act(async () => { finishRequest(new Response('image')); });
+
+    expect(createObjectURL).not.toHaveBeenCalled();
+    expect(screen.queryByRole('img')).toBeNull();
   });
 
   it('disables the button while waiting for the backend', async () => {

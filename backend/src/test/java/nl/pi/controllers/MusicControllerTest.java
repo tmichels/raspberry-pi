@@ -1,6 +1,7 @@
 package nl.pi.controllers;
 
 import nl.pi.services.CommandService;
+import nl.pi.repositories.InvalidAlbumPathException;
 import nl.pi.services.music.MusicLibrary;
 import nl.pi.services.music.MusicLibrary.Album;
 import nl.pi.services.music.MusicLibrary.Artist;
@@ -19,6 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.mockito.Mockito.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
@@ -95,6 +97,63 @@ class MusicControllerTest {
     @Test
     void rejectsPostRequestsWithoutScanningTheDirectory() throws Exception {
         mvc.perform(post("/api/music").with(jwt())).andExpect(status().isMethodNotAllowed());
+        verifyNoInteractions(musicService, commandService);
+    }
+
+    @Test
+    void returnsAlbumArtAsJpeg() throws Exception {
+        var image = new byte[]{1, 2, 3};
+        when(musicService.getAlbumArt("Artist/Album name")).thenReturn(Optional.of(image));
+
+        mvc.perform(get("/api/music/album-art").param("path", "Artist/Album name")
+                        .accept(MediaType.IMAGE_JPEG).with(jwt()))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.IMAGE_JPEG))
+                .andExpect(content().bytes(image));
+    }
+
+    @Test
+    void allowsTheMusicRootAsAlbumPath() throws Exception {
+        when(musicService.getAlbumArt("")).thenReturn(Optional.of(new byte[]{1}));
+        mvc.perform(get("/api/music/album-art").param("path", "").with(jwt()))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void returnsNotFoundForMissingAlbumArt() throws Exception {
+        when(musicService.getAlbumArt("Album")).thenReturn(Optional.empty());
+        mvc.perform(get("/api/music/album-art").param("path", "Album").with(jwt()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void rejectsInvalidAlbumPaths() throws Exception {
+        when(musicService.getAlbumArt("../outside")).thenThrow(new InvalidAlbumPathException());
+        mvc.perform(get("/api/music/album-art").param("path", "../outside")
+                        .accept(MediaType.IMAGE_JPEG).with(jwt()))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.detail").value("Het albumpad is ongeldig."));
+    }
+
+    @Test
+    void reportsAlbumArtReadFailures() throws Exception {
+        when(musicService.getAlbumArt("Album")).thenThrow(new IOException("Niet leesbaar"));
+        mvc.perform(get("/api/music/album-art").param("path", "Album").with(jwt()))
+                .andExpect(status().isInternalServerError());
+    }
+
+    @Test
+    void requiresAuthenticationForAlbumArt() throws Exception {
+        mvc.perform(get("/api/music/album-art").param("path", "Album"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(musicService, commandService);
+    }
+
+    @Test
+    void requiresTheAlbumPathParameter() throws Exception {
+        mvc.perform(get("/api/music/album-art").with(jwt()))
+                .andExpect(status().isBadRequest());
         verifyNoInteractions(musicService, commandService);
     }
 }

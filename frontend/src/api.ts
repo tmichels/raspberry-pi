@@ -80,3 +80,19 @@ export async function getMusic(): Promise<MusicLibrary> {
 
   return response.json();
 }
+
+export async function getAlbumArt(albumPath: string): Promise<Blob> {
+  const token = await getAccessToken();
+  const response = await fetch(`/api/music/album-art?path=${encodeURIComponent(albumPath)}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    signal: AbortSignal.timeout(10_000),
+  });
+
+  if (!response.ok) {
+    await throwRequestError(response);
+  }
+
+  return response.blob();
+}

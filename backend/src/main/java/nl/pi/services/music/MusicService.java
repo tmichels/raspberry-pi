@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -26,6 +27,10 @@ public class MusicService {
                 .map(path -> new TaggedAudioFile(path, readTags(path)))
                 .toList();
         return libraryAssembler.assemble(taggedAudioFiles);
+    }
+
+    public Optional<byte[]> getAlbumArt(String albumPath) throws IOException {
+        return fileRepository.findAlbumArt(albumPath);
     }
 
     private AudioTags readTags(Path path) {

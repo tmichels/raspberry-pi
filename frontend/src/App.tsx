@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import AlbumArt from './AlbumArt';
 import { createFile, getMusic } from './api';
 import { getUsername, logout } from './auth';
 import type { CommandResult, MusicLibrary } from './api';
@@ -101,15 +102,22 @@ export default function App() {
               >
                 ← Albums van {selectedArtist.name}
               </button>
-              <h2>{selectedAlbum.name}</h2>
-              <p>{selectedAlbum.tracks.length} nummers</p>
-              {Object.keys(selectedAlbum.tags).length > 0 && (
-                <dl className="metadata">
-                  {Object.entries(selectedAlbum.tags).map(([key, value]) => (
-                    <div key={key}><dt>{key}</dt><dd>{value}</dd></div>
-                  ))}
-                </dl>
-              )}
+              <div className="album-details">
+                <div className="album-info">
+                  <h2>{selectedAlbum.name}</h2>
+                  <p>{selectedAlbum.tracks.length} nummers</p>
+                  {Object.keys(selectedAlbum.tags).some((key) => key !== 'COVER_ART') && (
+                    <dl className="metadata">
+                      {Object.entries(selectedAlbum.tags).filter(([key]) => key !== 'COVER_ART').map(([key, value]) => (
+                        <div key={key}><dt>{key}</dt><dd>{value}</dd></div>
+                      ))}
+                    </dl>
+                  )}
+                </div>
+                {Object.hasOwn(selectedAlbum.tags, 'COVER_ART') && (
+                  <AlbumArt key={selectedAlbum.path} albumName={selectedAlbum.name} albumPath={selectedAlbum.path} />
+                )}
+              </div>
               {selectedAlbum.tracks.length > 0 ? (
                 <ol className="music-list tracks">
                   {selectedAlbum.tracks.map((track) => (

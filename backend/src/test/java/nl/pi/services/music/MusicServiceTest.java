@@ -19,6 +19,7 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -337,6 +338,14 @@ class MusicServiceTest {
         when(fileRepository.findAudioFiles()).thenThrow(new IOException("Map ontbreekt"));
 
         assertThrows(IOException.class, service::getMusic);
+    }
+
+    @Test
+    void retrievesAlbumArtForTheProvidedPath() throws Exception {
+        var image = new byte[]{1, 2, 3};
+        when(fileRepository.findAlbumArt("Artist/Album")).thenReturn(Optional.of(image));
+
+        assertEquals(Optional.of(image), service.getAlbumArt("Artist/Album"));
     }
 
     private void givenFiles(String... names) throws IOException {

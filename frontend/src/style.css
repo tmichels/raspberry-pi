@@ -89,6 +89,33 @@ button:disabled {
   color: inherit;
 }
 
+.album-details {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.album-info {
+  min-width: 0;
+}
+
+.album-art {
+  width: min(35%, 200px);
+  height: auto;
+  border-radius: 8px;
+}
+
+@media (max-width: 480px) {
+  .album-details {
+    flex-wrap: wrap;
+  }
+
+  .album-art {
+    width: min(100%, 200px);
+  }
+}
+
 .tracks {
   padding-left: 28px;
 }
