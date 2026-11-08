@@ -9,7 +9,7 @@ body {
 }
 
 main {
-  max-width: 480px;
+  max-width: 720px;
   margin: 48px auto;
 }
 
@@ -31,5 +31,103 @@ button:disabled {
 .status {
   min-height: 3em;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.music-library {
+  margin-top: 32px;
+  padding: 24px;
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  border-radius: 12px;
+}
+
+.music-library h2 {
+  margin-bottom: 4px;
+}
+
+.music-library h2 + p {
+  margin-top: 0;
+  opacity: 0.75;
+}
+
+.music-list {
+  display: grid;
+  gap: 8px;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.music-item {
+  display: flex;
+  width: 100%;
+  min-height: 56px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  text-align: left;
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  border-radius: 8px;
+  background: transparent;
+}
+
+.music-item:hover {
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.item-count {
+  font-size: 0.875em;
+  opacity: 0.7;
+  white-space: nowrap;
+}
+
+.back-button {
+  min-height: auto;
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.tracks {
+  padding-left: 28px;
+}
+
+.tracks li {
+  padding: 12px 0;
+}
+
+.track-warning {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.875em;
+  overflow-wrap: anywhere;
+}
+
+.metadata {
+  opacity: 0.75;
+}
+
+.track-warning {
+  color: #b45309;
+}
+
+.metadata {
+  margin: 10px 0 0;
+  font-size: 0.875em;
+}
+
+.metadata div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.metadata dt {
+  font-weight: 600;
+}
+
+.metadata dd {
+  margin: 0;
   overflow-wrap: anywhere;
 }

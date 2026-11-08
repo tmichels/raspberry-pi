@@ -61,17 +61,33 @@ describe('Raspberry Pi bediening', () => {
     expect(timeout).toHaveBeenCalledWith(10_000);
   });
 
-  it('fetches the music endpoint and displays its raw JSON response', async () => {
-    const rawJson = '{\n  "artists": []\n}';
+  it('fetches the music endpoint and lets the user browse the library', async () => {
+    const music = {
+      artists: [{
+        name: 'Artiest A',
+        albums: [{
+          name: 'Album A',
+          tags: { GENRE: 'Jazz' },
+          tracks: [{
+            title: 'Nummer A',
+            path: 'Artiest A/Album A/nummer.mp3',
+            status: 'OK',
+            missingTags: [],
+            tags: { YEAR: '2024' },
+          }],
+        }],
+      }],
+    };
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(rawJson, { headers: { 'Content-Type': 'application/json' } }),
+      new Response(JSON.stringify(music), { headers: { 'Content-Type': 'application/json' } }),
     );
     vi.stubGlobal('fetch', fetchMock);
     const timeout = vi.spyOn(AbortSignal, 'timeout');
     const button = clickGetMusic();
 
     await waitFor(() => {
-      expect(screen.getByRole('status').textContent).toBe(rawJson);
+      expect(screen.getByRole('heading', { name: 'Artiesten' })).toBeDefined();
+      expect(screen.getByRole('button', { name: /Artiest A/ })).toBeDefined();
     });
     expect(button.disabled).toBe(false);
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -84,6 +100,22 @@ describe('Raspberry Pi bediening', () => {
     expect(request).not.toHaveProperty('method');
     expect(request).not.toHaveProperty('body');
     expect(timeout).toHaveBeenCalledWith(10_000);
+
+    fireEvent.click(screen.getByRole('button', { name: /Artiest A/ }));
+    expect(screen.getByRole('heading', { name: 'Artiest A' })).toBeDefined();
+    expect(screen.getByRole('button', { name: /Album A/ })).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: /Album A/ }));
+    expect(screen.getByRole('heading', { name: 'Album A' })).toBeDefined();
+    expect(screen.getByText('Nummer A')).toBeDefined();
+    expect(screen.queryByText('Artiest A/Album A/nummer.mp3')).toBeNull();
+    expect(screen.getByText('Jazz')).toBeDefined();
+    expect(screen.getByText('2024')).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: '← Albums van Artiest A' }));
+    expect(screen.getByRole('button', { name: /Album A/ })).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: '← Alle artiesten' }));
+    expect(screen.getByRole('button', { name: /Artiest A/ })).toBeDefined();
   });
 
   it('disables the button while waiting for the backend', async () => {

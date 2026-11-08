@@ -5,6 +5,29 @@ export type CommandResult = {
   exitCode: number;
 };
 
+export type MusicTrack = {
+  title: string;
+  path: string;
+  status: 'OK' | 'MISSING_TAGS';
+  missingTags: string[];
+  tags: Record<string, string>;
+};
+
+export type MusicAlbum = {
+  name: string;
+  tags: Record<string, string>;
+  tracks: MusicTrack[];
+};
+
+export type MusicArtist = {
+  name: string;
+  albums: MusicAlbum[];
+};
+
+export type MusicLibrary = {
+  artists: MusicArtist[];
+};
+
 async function throwRequestError(response: Response): Promise<never> {
   if (response.status === 401) {
     throw new Error('Toegang geweigerd (HTTP 401). Herlaad de pagina om opnieuw in te loggen.');
@@ -41,7 +64,7 @@ export function createFile(): Promise<CommandResult> {
   return executeCommand('/api/commands/touch');
 }
 
-export async function getMusic(): Promise<string> {
+export async function getMusic(): Promise<MusicLibrary> {
   const token = await getAccessToken();
   const response = await fetch('/api/music', {
     headers: {
@@ -54,5 +77,5 @@ export async function getMusic(): Promise<string> {
     await throwRequestError(response);
   }
 
-  return response.text();
+  return response.json();
 }
