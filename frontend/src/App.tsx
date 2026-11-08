@@ -12,6 +12,7 @@ export default function App() {
   const [selectedAlbumIndex, setSelectedAlbumIndex] = useState<number | null>(null);
   const selectedArtist = selectedArtistIndex === null ? undefined : music?.artists[selectedArtistIndex];
   const selectedAlbum = selectedAlbumIndex === null ? undefined : selectedArtist?.albums[selectedAlbumIndex];
+  const showTrackNumbers = selectedAlbum?.tracks.every((track) => Object.hasOwn(track.tags, 'TRACK')) ?? false;
 
   async function handleLogout() {
     try {
@@ -80,22 +81,25 @@ export default function App() {
                 )}
               </div>
               {selectedAlbum.tracks.length > 0 ? (
-                <ol className="music-list tracks">
+                <ol className={`music-list tracks${showTrackNumbers ? ' tracks--numbered' : ''}`}>
                   {selectedAlbum.tracks.map((track) => (
                     <li key={track.path}>
-                      <strong>{track.title}</strong>
-                      {track.status === 'MISSING_TAGS' && (
-                        <span className="track-warning">
-                          Ontbrekende tags: {track.missingTags.join(', ')}
-                        </span>
-                      )}
-                      {Object.keys(track.tags).length > 0 && (
-                        <dl className="metadata">
-                          {Object.entries(track.tags).map(([key, value]) => (
-                            <div key={key}><dt>{key}</dt><dd>{value}</dd></div>
-                          ))}
-                        </dl>
-                      )}
+                      {showTrackNumbers && <span className="track-number">{track.tags.TRACK}</span>}
+                      <div className="track-details">
+                        <strong>{track.title}</strong>
+                        {track.status === 'MISSING_TAGS' && (
+                          <span className="track-warning">
+                            Ontbrekende tags: {track.missingTags.join(', ')}
+                          </span>
+                        )}
+                        {Object.keys(track.tags).some((key) => !showTrackNumbers || key !== 'TRACK') && (
+                          <dl className="metadata">
+                            {Object.entries(track.tags).filter(([key]) => !showTrackNumbers || key !== 'TRACK').map(([key, value]) => (
+                              <div key={key}><dt>{key}</dt><dd>{value}</dd></div>
+                            ))}
+                          </dl>
+                        )}
+                      </div>
                     </li>
                   ))}
                 </ol>

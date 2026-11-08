@@ -124,6 +124,25 @@ button:disabled {
   padding: 12px 0;
 }
 
+.tracks--numbered {
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: 12px;
+}
+
+.tracks--numbered li {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
+.track-number {
+  text-align: right;
+}
+
+.track-details {
+  min-width: 0;
+}
+
 .track-warning {
   display: block;
   margin-top: 4px;

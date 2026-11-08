@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { getAccessToken, logout } from './auth';
@@ -88,6 +88,51 @@ describe('Raspberry Pi bediening', () => {
     expect(screen.getByRole('button', { name: /Album A/ })).toBeDefined();
     fireEvent.click(screen.getByRole('button', { name: '← Alle artiesten' }));
     expect(screen.getByRole('button', { name: /Artiest A/ })).toBeDefined();
+  });
+
+  it.each([
+    { trackTags: [{ TRACK: '2', YEAR: '2024' }, { TRACK: '12' }], numbered: true },
+    { trackTags: [{ TRACK: '2' }, {}], numbered: false },
+    { trackTags: [{}, {}], numbered: false },
+  ])('shows track numbers before titles only when every track has a TRACK tag: $trackTags', async ({ trackTags, numbered }) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      artists: [{ name: 'Artiest', albums: [{
+        name: 'Album',
+        path: 'Album',
+        tags: {},
+        tracks: trackTags.map((tags, index) => ({
+          title: `Nummer ${index + 1}`,
+          path: `Album/${index + 1}.mp3`,
+          status: index === 1 ? 'MISSING_TAGS' : 'OK',
+          missingTags: index === 1 ? ['ARTIST'] : [],
+          tags,
+        })),
+      }] }],
+    }))));
+
+    clickGetMusic();
+    fireEvent.click(await screen.findByRole('button', { name: /Artiest/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Album/ }));
+
+    const list = screen.getByRole('list');
+    const tracks = within(list).getAllByRole('listitem');
+    expect(list.classList.contains('tracks--numbered')).toBe(numbered);
+    for (const [index, track] of tracks.entries()) {
+      const number = track.querySelector('.track-number');
+      expect(number?.textContent ?? null).toBe(numbered ? trackTags[index].TRACK : null);
+      expect(within(track).getByText(`Nummer ${index + 1}`)).toBeDefined();
+      if (number) {
+        expect(number.nextElementSibling?.classList.contains('track-details')).toBe(true);
+      }
+    }
+    expect(within(tracks[1]).getByText('Ontbrekende tags: ARTIST')).toBeDefined();
+    if ('TRACK' in trackTags[0]) {
+      expect(within(tracks[0]).queryByText('TRACK') !== null).toBe(!numbered);
+    }
+    if ('YEAR' in trackTags[0]) {
+      expect(within(tracks[0]).getByText('2024')).toBeDefined();
+      expect(tracks[1].querySelector('.metadata')).toBeNull();
+    }
   });
 
   it('fetches and displays the cover only when an album with COVER_ART is opened', async () => {
