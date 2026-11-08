@@ -1,13 +1,13 @@
-package nl.pi.services;
+package nl.pi.services.music;
 
 import nl.pi.config.MusicProperties;
 import nl.pi.repositories.AudioReadException;
 import nl.pi.repositories.AudioTagReader;
 import nl.pi.repositories.MusicFileRepository;
-import nl.pi.services.MusicLibrary.Album;
-import nl.pi.services.MusicLibrary.Artist;
-import nl.pi.services.MusicLibrary.Track;
-import nl.pi.services.MusicLibrary.TrackStatus;
+import nl.pi.services.music.MusicLibrary.Album;
+import nl.pi.services.music.MusicLibrary.Artist;
+import nl.pi.services.music.MusicLibrary.Track;
+import nl.pi.services.music.MusicLibrary.TrackStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,7 +39,12 @@ class MusicServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new MusicService(new MusicProperties(DIRECTORY), fileRepository, tagReader);
+        var properties = new MusicProperties(DIRECTORY);
+        var tagProcessor = new MusicTagProcessor();
+        var trackMapper = new MusicTrackMapper(properties, tagProcessor);
+        var albumAssembler = new MusicAlbumAssembler(properties, tagProcessor, trackMapper);
+        var libraryAssembler = new MusicLibraryAssembler(albumAssembler);
+        service = new MusicService(properties, fileRepository, tagReader, libraryAssembler);
     }
 
     @Test
@@ -340,14 +345,14 @@ class MusicServiceTest {
     }
 
     private void givenTags(String name, Map<String, List<String>> tags) {
-        when(tagReader.readTags(DIRECTORY.resolve(name))).thenReturn(tags);
+        when(tagReader.readTags(DIRECTORY.resolve(name))).thenReturn(new AudioTags(tags));
     }
 
     private Map<String, List<String>> tagsWithExtras(
             String artist, String album, String title, Map<String, List<String>> extras) {
         var tags = new HashMap<>(tags(artist, album, title));
         tags.putAll(extras);
-        return tags;
+        return Map.copyOf(tags);
     }
 
     private Map<String, List<String>> tags(String artist, String album, String title) {

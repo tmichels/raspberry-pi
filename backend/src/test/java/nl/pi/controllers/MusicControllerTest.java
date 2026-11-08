@@ -1,12 +1,12 @@
 package nl.pi.controllers;
 
 import nl.pi.services.CommandService;
-import nl.pi.services.MusicLibrary;
-import nl.pi.services.MusicLibrary.Album;
-import nl.pi.services.MusicLibrary.Artist;
-import nl.pi.services.MusicLibrary.Track;
-import nl.pi.services.MusicLibrary.TrackStatus;
-import nl.pi.services.MusicService;
+import nl.pi.services.music.MusicLibrary;
+import nl.pi.services.music.MusicLibrary.Album;
+import nl.pi.services.music.MusicLibrary.Artist;
+import nl.pi.services.music.MusicLibrary.Track;
+import nl.pi.services.music.MusicLibrary.TrackStatus;
+import nl.pi.services.music.MusicService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;

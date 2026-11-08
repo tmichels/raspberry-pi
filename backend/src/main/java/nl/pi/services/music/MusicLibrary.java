@@ -1,4 +1,4 @@
-package nl.pi.services;
+package nl.pi.services.music;
 
 import java.util.List;
 import java.util.Map;
