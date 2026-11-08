@@ -15,15 +15,13 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 @Slf4j
 @Service
@@ -33,7 +31,6 @@ public class MusicService {
     private static final String UNKNOWN_ARTIST = "Onbekende artiest";
     private static final String UNKNOWN_ALBUM = "Onbekend album";
     private static final List<String> REQUIRED_TAGS = List.of("ARTIST", "ALBUM", "TITLE");
-    private static final Set<String> ALBUM_TAGS = Set.of("GENRE", "TRACK_TOTAL", "COVER_ART");
     private static final String VALUE_SEPARATOR = "; ";
 
     private final MusicProperties properties;
@@ -42,15 +39,17 @@ public class MusicService {
 
     public MusicLibrary getMusic() throws IOException {
         List<Artist> artists = new ArrayList<>();
+        Map<Album, List<Map<String, List<String>>>> tagsByAlbum = new IdentityHashMap<>();
         List<Path> audioFiles = fileRepository.findAudioFiles();
         for (var audioFile : audioFiles) {
             var tags = readTags(audioFile);
             var artist = findOrAddArtist(artists, firstValue(tags, "ARTIST", UNKNOWN_ARTIST));
             var album = findOrAddAlbum(artist, firstValue(tags, "ALBUM", UNKNOWN_ALBUM));
             album.tracks().add(toTrack(audioFile, tags));
-            selectTags(tags, ALBUM_TAGS::contains)
-                    .forEach((key, value) -> album.tags().merge(key, value, this::mergeValues));
+            tagsByAlbum.computeIfAbsent(album, ignored -> new ArrayList<>()).add(tags);
         }
+        artists.forEach(artist -> artist.albums().forEach(album ->
+                assignAlbumTags(album, tagsByAlbum.get(album))));
         artists.sort(Comparator.comparing(Artist::name));
         artists.forEach(artist -> artist.albums().sort(Comparator.comparing(Album::name)));
         return new MusicLibrary(artists);
@@ -91,7 +90,27 @@ public class MusicService {
         var missingTags = REQUIRED_TAGS.stream().filter(key -> !tags.containsKey(key)).toList();
         var status = missingTags.isEmpty() ? TrackStatus.OK : TrackStatus.MISSING_TAGS;
         var title = firstValue(tags, "TITLE", path.getFileName().toString());
-        return new Track(title, relativePath(path), status, missingTags, selectTags(tags, key -> !REQUIRED_TAGS.contains(key) && !ALBUM_TAGS.contains(key)));
+        return new Track(title, relativePath(path), status, missingTags, selectTags(tags, key -> !REQUIRED_TAGS.contains(key)));
+    }
+
+    private void assignAlbumTags(Album album, List<Map<String, List<String>>> trackTags) {
+        var firstTrackTags = trackTags.getFirst();
+        var sharedKeys = new HashSet<>(firstTrackTags.keySet());
+        sharedKeys.removeIf(REQUIRED_TAGS::contains);
+        for (var tags : trackTags.subList(1, trackTags.size())) {
+            sharedKeys.removeIf(key -> !tags.containsKey(key)
+                    || !tags.get(key).equals(firstTrackTags.get(key)));
+        }
+        album.tags().putAll(selectTags(firstTrackTags, sharedKeys::contains));
+        for (int index = 0; index < album.tracks().size(); index++) {
+            var track = album.tracks().get(index);
+            album.tracks().set(index, new Track(
+                    track.title(),
+                    track.path(),
+                    track.status(),
+                    track.missingTags(),
+                    selectTags(trackTags.get(index), key -> !REQUIRED_TAGS.contains(key) && !sharedKeys.contains(key))));
+        }
     }
 
     private String relativePath(Path path) {
@@ -112,9 +131,4 @@ public class MusicService {
         return selected;
     }
 
-    private String mergeValues(String existing, String added) {
-        return Stream.concat(Arrays.stream(existing.split(VALUE_SEPARATOR)), Arrays.stream(added.split(VALUE_SEPARATOR)))
-                .distinct()
-                .collect(Collectors.joining(VALUE_SEPARATOR));
-    }
 }
