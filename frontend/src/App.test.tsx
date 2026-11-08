@@ -23,9 +23,9 @@ function clickCreateFile() {
   return button;
 }
 
-function clickListMusicDirectories() {
+function clickGetMusic() {
   render(<App />);
-  const button = screen.getByRole<HTMLButtonElement>('button', { name: 'Muziekmappen tonen' });
+  const button = screen.getByRole<HTMLButtonElement>('button', { name: 'Muziek ophalen' });
   fireEvent.click(button);
   return button;
 }
@@ -61,25 +61,29 @@ describe('Raspberry Pi bediening', () => {
     expect(timeout).toHaveBeenCalledWith(10_000);
   });
 
-  it('lists music directories and displays the command output', async () => {
+  it('fetches the music endpoint and displays its raw JSON response', async () => {
+    const rawJson = '{\n  "artists": []\n}';
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ output: 'artiest/album\n', exitCode: 0 })),
+      new Response(rawJson, { headers: { 'Content-Type': 'application/json' } }),
     );
     vi.stubGlobal('fetch', fetchMock);
-    const button = clickListMusicDirectories();
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
+    const button = clickGetMusic();
 
     await waitFor(() => {
-      expect(screen.getByRole('status').textContent).toBe(
-        'Muziekmappen opgehaald.\nExitcode: 0\nOutput:\nartiest/album\n',
-      );
+      expect(screen.getByRole('status').textContent).toBe(rawJson);
     });
     expect(button.disabled).toBe(false);
-    expect(fetchMock).toHaveBeenCalledExactlyOnceWith('/api/commands/music-directories', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer access-token' },
-      body: '{}',
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [endpoint, request] = fetchMock.mock.calls[0];
+    expect(endpoint).toBe('/api/music');
+    expect(request).toMatchObject({
+      headers: { Authorization: 'Bearer access-token' },
       signal: expect.any(AbortSignal),
     });
+    expect(request).not.toHaveProperty('method');
+    expect(request).not.toHaveProperty('body');
+    expect(timeout).toHaveBeenCalledWith(10_000);
   });
 
   it('disables the button while waiting for the backend', async () => {

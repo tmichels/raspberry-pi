@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { createFile, listMusicDirectories } from './api';
+import { createFile, getMusic } from './api';
 import { getUsername, logout } from './auth';
 import type { CommandResult } from './api';
 
@@ -50,13 +50,21 @@ export default function App() {
     );
   }
 
-  function handleListMusicDirectories() {
-    return handleCommand(
-      listMusicDirectories,
-      'Muziekmappen worden opgehaald...',
-      'Muziekmappen opgehaald.',
-      'Muziekmappen ophalen mislukt.',
-    );
+  async function handleGetMusic() {
+    setIsRunning(true);
+    setStatus('Muziek wordt opgehaald...');
+
+    try {
+      setStatus(await getMusic());
+    } catch (error) {
+      if ((error instanceof Error || error instanceof DOMException) && error.name === 'TimeoutError') {
+        setStatus('Geen antwoord binnen 10 seconden. Probeer het opnieuw.');
+      } else {
+        setStatus(`Mislukt: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    } finally {
+      setIsRunning(false);
+    }
   }
 
   return (
@@ -68,11 +76,11 @@ export default function App() {
       <button type="button" disabled={isRunning} onClick={handleCreateFile}>
         Bestand aanmaken
       </button>
-      <p>Toon de mappen in je muziekbibliotheek.</p>
-      <button type="button" disabled={isRunning} onClick={handleListMusicDirectories}>
-        Muziekmappen tonen
+      <p>Toon de ruwe JSON van je muziekbibliotheek.</p>
+      <button type="button" disabled={isRunning} onClick={handleGetMusic}>
+        Muziek ophalen
       </button>
-      <p className="status" role="status" aria-live="polite">{status}</p>
+      <pre className="status" role="status" aria-live="polite">{status}</pre>
     </main>
   );
 }
