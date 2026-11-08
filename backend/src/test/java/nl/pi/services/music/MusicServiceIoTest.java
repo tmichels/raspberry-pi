@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -73,6 +74,24 @@ class MusicServiceIoTest {
         var service = new MusicService(new MusicProperties(Path.of("/music")), repository, reader, assembler);
 
         assertSame(failure, assertThrows(IOException.class, service::getMusic));
+        verifyNoInteractions(reader, assembler);
+    }
+
+    @Test
+    void delegatesTrackLookupWithoutReadingTagsOrAssemblingTheLibrary() throws IOException {
+        var repository = mock(MusicFileRepository.class);
+        var reader = mock(AudioTagReader.class);
+        var assembler = mock(MusicLibraryAssembler.class);
+        var service = new MusicService(new MusicProperties(Path.of("/music")), repository, reader, assembler);
+        var file = Path.of("/music/Album/track.mp3");
+        when(repository.findAudioFile("Album/track.mp3")).thenReturn(Optional.of(file));
+        when(repository.findAudioFile("missing.mp3")).thenReturn(Optional.empty());
+        var failure = new IOException("unavailable");
+        when(repository.findAudioFile("broken.mp3")).thenThrow(failure);
+
+        assertEquals(Optional.of(file), service.getAudioFile("Album/track.mp3"));
+        assertEquals(Optional.empty(), service.getAudioFile("missing.mp3"));
+        assertSame(failure, assertThrows(IOException.class, () -> service.getAudioFile("broken.mp3")));
         verifyNoInteractions(reader, assembler);
     }
 }

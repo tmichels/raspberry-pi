@@ -26,12 +26,15 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Date;
 
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.hamcrest.Matchers.startsWith;
 import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -42,6 +45,8 @@ class SecurityConfigTest {
     private static final RSAKey KEY = generateKey();
     private static final HttpServer JWKS_SERVER = startJwksServer();
     private static final String ISSUER = "http://localhost:" + JWKS_SERVER.getAddress().getPort() + "/realms/donna";
+    private static final String AUDIO = "0123456789";
+    private static final Path MUSIC_DIRECTORY = createMusicDirectory();
 
     @Autowired
     private MockMvc mvc;
@@ -53,6 +58,7 @@ class SecurityConfigTest {
     static void jwtProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.security.oauth2.resourceserver.jwt.issuer-uri", () -> ISSUER);
         registry.add("spring.security.oauth2.resourceserver.jwt.jwk-set-uri", () -> ISSUER + "/certs");
+        registry.add("pi.music.directory", MUSIC_DIRECTORY::toString);
     }
 
     @AfterAll
@@ -95,6 +101,47 @@ class SecurityConfigTest {
         verifyNoInteractions(commandService);
     }
 
+    @Test
+    void streamsAudioWithAValidSignedToken() throws Exception {
+        var bearer = "Bearer " + token(KEY, ISSUER, "pi", Instant.now().plusSeconds(300));
+        mvc.perform(get("/api/music/stream").param("path", "Artist/Album/track.mp3")
+                        .header("Authorization", bearer))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", "audio/mpeg"))
+                .andExpect(header().string("Content-Length", "10"))
+                .andExpect(header().string("Accept-Ranges", "bytes"))
+                .andExpect(header().doesNotExist("Content-Range"))
+                .andExpect(content().string(AUDIO));
+        streamRange(bearer, "bytes=0-", "bytes 0-9/10", AUDIO);
+        streamRange(bearer, "bytes=2-5", "bytes 2-5/10", "2345");
+    }
+
+    @Test
+    void rejectsAudioStreamsWithoutOrWithInvalidBearerToken() throws Exception {
+        mvc.perform(get("/api/music/stream").param("path", "Artist/Album/track.mp3"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string("WWW-Authenticate", startsWith("Bearer")));
+        mvc.perform(get("/api/music/stream").param("path", "Artist/Album/track.mp3")
+                        .header("Authorization", "Bearer invalid-token"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string("WWW-Authenticate", startsWith("Bearer")));
+        mvc.perform(get("/api/music/stream").param("path", "Artist/Album/track.mp3")
+                        .header("Authorization", "Bearer " + token(generateKey(), ISSUER, "pi",
+                                Instant.now().plusSeconds(300))))
+                .andExpect(status().isUnauthorized());
+    }
+
+    private void streamRange(String bearer, String range, String contentRange, String body) throws Exception {
+        mvc.perform(get("/api/music/stream").param("path", "Artist/Album/track.mp3")
+                        .header("Authorization", bearer).header("Range", range))
+                .andExpect(status().isPartialContent())
+                .andExpect(header().string("Content-Type", "audio/mpeg"))
+                .andExpect(header().string("Content-Range", contentRange))
+                .andExpect(header().string("Content-Length", Integer.toString(body.length())))
+                .andExpect(header().string("Accept-Ranges", "bytes"))
+                .andExpect(content().string(body));
+    }
+
     private void requestWithToken(String token, int expectedStatus) throws Exception {
         mvc.perform(post("/api/commands/touch").header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON).content("{}"))
@@ -119,6 +166,17 @@ class SecurityConfigTest {
             return new RSAKeyGenerator(2048).keyID("test-key").generate();
         } catch (JOSEException exception) {
             throw new IllegalStateException("Cannot generate test signing key", exception);
+        }
+    }
+
+    private static Path createMusicDirectory() {
+        try {
+            var directory = Files.createTempDirectory("security-config-music");
+            var album = Files.createDirectories(directory.resolve("Artist/Album"));
+            Files.writeString(album.resolve("track.mp3"), AUDIO);
+            return directory;
+        } catch (IOException exception) {
+            throw new IllegalStateException("Cannot create test music directory", exception);
         }
     }
 

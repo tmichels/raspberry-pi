@@ -25,7 +25,7 @@ button {
 }
 
 button:disabled {
-  cursor: wait;
+  cursor: not-allowed;
 }
 
 .status {
@@ -89,6 +89,29 @@ button:disabled {
   color: inherit;
 }
 
+.album-row {
+  display: flex;
+  gap: 8px;
+}
+
+.album-row .music-item {
+  min-width: 0;
+  flex: 1;
+}
+
+.album-play {
+  min-width: 56px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+}
+
+.album-play:hover {
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
 .album-details {
   display: flex;
   align-items: flex-start;
@@ -145,6 +168,55 @@ button:disabled {
 
 .track-details {
   min-width: 0;
+}
+
+.track-playing strong {
+  color: #b45309;
+}
+
+.audio-player {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 24px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  border-radius: 12px;
+  background: Canvas;
+  color: CanvasText;
+}
+
+.audio-player .album-art {
+  width: 64px;
+  flex: none;
+}
+
+.player-content {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.player-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.player-controls button {
+  min-width: 40px;
+  padding: 8px;
+}
+
+.player-controls input {
+  flex: 1;
+  min-width: 0;
+}
+
+.player-controls span {
+  font-variant-numeric: tabular-nums;
 }
 
 .track-warning {

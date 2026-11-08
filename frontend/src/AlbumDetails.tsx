@@ -1,7 +1,7 @@
 import AlbumArt from './AlbumArt';
 import type { MusicAlbum } from './api';
 
-export default function AlbumDetails({ album }: { album: MusicAlbum }) {
+export default function AlbumDetails({ album, playingTrackPath }: { album: MusicAlbum; playingTrackPath?: string }) {
   const showTrackNumbers = album.tracks.every((track) => Object.hasOwn(track.tags, 'TRACK'));
 
   return (
@@ -23,7 +23,7 @@ export default function AlbumDetails({ album }: { album: MusicAlbum }) {
       {album.tracks.length > 0 ? (
         <ol className={`music-list tracks${showTrackNumbers ? ' tracks--numbered' : ''}`}>
           {album.tracks.map((track) => (
-            <li key={track.path}>
+            <li key={track.path} className={track.path === playingTrackPath ? 'track-playing' : undefined} aria-current={track.path === playingTrackPath ? 'true' : undefined}>
               {showTrackNumbers && <span className="track-number">{track.tags.TRACK}</span>}
               <div className="track-details">
                 <strong>{track.title}</strong>

@@ -2,6 +2,7 @@ package nl.pi.controllers;
 
 import lombok.extern.slf4j.Slf4j;
 import nl.pi.repositories.InvalidAlbumPathException;
+import nl.pi.repositories.InvalidTrackPathException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -16,6 +17,11 @@ public class MusicExceptionHandler {
     @ExceptionHandler(InvalidAlbumPathException.class)
     public ProblemDetail handleInvalidAlbumPath() {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Het albumpad is ongeldig.");
+    }
+
+    @ExceptionHandler(InvalidTrackPathException.class)
+    public ProblemDetail handleInvalidTrackPath() {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Het trackpad is ongeldig.");
     }
 
     @ExceptionHandler(IOException.class)

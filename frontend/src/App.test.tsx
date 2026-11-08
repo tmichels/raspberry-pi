@@ -1,13 +1,25 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { getAccessToken, logout } from './auth';
+import { prepareAudioStreaming } from './audioStream';
 
 vi.mock('./auth', () => ({
   getAccessToken: vi.fn().mockResolvedValue('access-token'),
   getUsername: () => 'donna-user',
   logout: vi.fn().mockResolvedValue(undefined),
 }));
+
+vi.mock('./audioStream', () => ({
+  prepareAudioStreaming: vi.fn().mockResolvedValue(undefined),
+  audioStreamUrl: (path: string) => `/api/music/stream?path=${encodeURIComponent(path)}`,
+}));
+
+beforeEach(() => {
+  vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+  vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+  vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
+});
 
 afterEach(() => {
   cleanup();
@@ -74,18 +86,18 @@ describe('Raspberry Pi bediening', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Artiest A/ }));
     expect(screen.getByRole('heading', { name: 'Artiest A' })).toBeDefined();
-    expect(screen.getByRole('button', { name: /Album A/ })).toBeDefined();
+    expect(screen.getByRole('button', { name: /^Album A/ })).toBeDefined();
 
-    fireEvent.click(screen.getByRole('button', { name: /Album A/ }));
-    expect(screen.getByRole('button', { name: /Album A/ }).getAttribute('aria-expanded')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: /^Album A/ }));
+    expect(screen.getByRole('button', { name: /^Album A/ }).getAttribute('aria-expanded')).toBe('true');
     expect(screen.getByText('Nummer A')).toBeDefined();
     expect(screen.queryByText('Artiest A/Album A/nummer.mp3')).toBeNull();
     expect(screen.getByText('Jazz')).toBeDefined();
     expect(screen.getByText('2024')).toBeDefined();
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole('button', { name: /Album A/ }));
-    expect(screen.getByRole('button', { name: /Album A/ })).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: /^Album A/ }));
+    expect(screen.getByRole('button', { name: /^Album A/ })).toBeDefined();
     expect(screen.queryByText('Nummer A')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '← Alle artiesten' }));
     expect(screen.getByRole('button', { name: /Artiest A/ })).toBeDefined();
@@ -113,9 +125,9 @@ describe('Raspberry Pi bediening', () => {
 
     clickGetMusic();
     fireEvent.click(await screen.findByRole('button', { name: /Artiest/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Album/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Album/ }));
 
-    const list = screen.getByRole('button', { name: /Album/ }).closest('li')!.querySelector('ol')!;
+    const list = screen.getByRole('button', { name: /^Album/ }).closest('li')!.querySelector('ol')!;
     const tracks = within(list).getAllByRole('listitem');
     expect(list.classList.contains('tracks--numbered')).toBe(numbered);
     for (const [index, track] of tracks.entries()) {
@@ -137,35 +149,170 @@ describe('Raspberry Pi bediening', () => {
   });
 
   it('expands one album below its button and keeps the album list visible', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       artists: [{ name: 'Artiest', albums: ['Eerste', 'Tweede'].map((name) => ({
         name,
         path: name,
         tags: {},
         tracks: [{ title: `Nummer ${name}`, path: `${name}/track`, status: 'OK', missingTags: [], tags: {} }],
       })) }],
-    }))));
+    })));
+    vi.stubGlobal('fetch', fetchMock);
 
     clickGetMusic();
     fireEvent.click(await screen.findByRole('button', { name: /Artiest/ }));
-    const first = screen.getByRole('button', { name: /Eerste/ });
-    const second = screen.getByRole('button', { name: /Tweede/ });
+    const first = screen.getByRole('button', { name: /^Eerste/ });
+    const second = screen.getByRole('button', { name: /^Tweede/ });
     expect(first.getAttribute('aria-expanded')).toBe('false');
+    const play = screen.getByRole('button', { name: 'Speel Eerste af' });
+    expect(play.textContent).toBe('▶');
+    expect(screen.getByRole('button', { name: 'Speel Tweede af' })).toBeDefined();
+    fireEvent.click(play);
+    expect(first.getAttribute('aria-expanded')).toBe('false');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Pauzeer Eerste' })).toBeDefined();
     fireEvent.click(first);
     expect(first.getAttribute('aria-expanded')).toBe('true');
     expect(within(first.closest('li')!).getByText('Nummer Eerste')).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Pauzeer Eerste' }));
+    expect(first.getAttribute('aria-expanded')).toBe('true');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(second.getAttribute('aria-expanded')).toBe('false');
 
     fireEvent.click(second);
     expect(first.getAttribute('aria-expanded')).toBe('false');
     expect(second.getAttribute('aria-expanded')).toBe('true');
-    expect(screen.queryByText('Nummer Eerste')).toBeNull();
+    expect(within(first.closest('li')!).queryByText('Nummer Eerste')).toBeNull();
     expect(within(second.closest('li')!).getByText('Nummer Tweede')).toBeDefined();
 
     fireEvent.click(screen.getByRole('button', { name: '← Alle artiesten' }));
     fireEvent.click(screen.getByRole('button', { name: /Artiest/ }));
-    expect(screen.getByRole('button', { name: /Tweede/ }).getAttribute('aria-expanded')).toBe('false');
+    expect(screen.getByRole('button', { name: /^Tweede/ }).getAttribute('aria-expanded')).toBe('false');
     expect(screen.queryByText('Nummer Tweede')).toBeNull();
+  });
+
+  it('plays tracks in order, supports playback controls and keeps playing while browsing', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      artists: [{ name: 'Artiest', albums: [{
+        name: 'Album', path: 'Artiest/Album', tags: {},
+        tracks: ['Eerste', 'Tweede'].map((title) => ({
+          title, path: `Artiest/Album/${title}.mp3`, tags: {}, status: 'OK', missingTags: [],
+        })),
+      }] }],
+    }))));
+    clickGetMusic();
+    fireEvent.click(await screen.findByRole('button', { name: /Artiest/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Speel Album af' }));
+    const player = screen.getByRole('complementary', { name: 'Muziekspeler' });
+    const audio = player.querySelector('audio')!;
+    await waitFor(() => expect(audio.getAttribute('src')).toBe('/api/music/stream?path=Artiest%2FAlbum%2FEerste.mp3'));
+    expect(audio.crossOrigin).toBe('anonymous');
+    expect(audio.play).toHaveBeenCalled();
+    expect(within(player).getByText('Eerste')).toBeDefined();
+    expect(within(player).getByRole<HTMLButtonElement>('button', { name: 'Vorig nummer' }).disabled).toBe(true);
+    Object.defineProperty(audio, 'duration', { configurable: true, value: 150 });
+    fireEvent.durationChange(audio);
+    fireEvent.change(within(player).getByRole('slider', { name: 'Afspeelpositie' }), { target: { value: '75' } });
+    expect(audio.currentTime).toBe(75);
+    expect(within(player).getByText('1:15')).toBeDefined();
+    expect(within(player).getByText('2:30')).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Album/ }));
+    expect(within(screen.getByRole('region', { name: 'Muziekbibliotheek' })).getByText('Eerste', { selector: 'strong' }).closest('li')?.getAttribute('aria-current')).toBe('true');
+    fireEvent.click(within(player).getByRole('button', { name: 'Pauzeren' }));
+    expect(audio.pause).toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Speel Album af' })).toBeDefined();
+    fireEvent.click(within(player).getByRole('button', { name: 'Afspelen' }));
+    fireEvent.ended(audio);
+    await waitFor(() => expect(audio.getAttribute('src')).toContain('Tweede.mp3'));
+    expect(within(player).getByText('Tweede')).toBeDefined();
+    expect(within(player).getByRole<HTMLButtonElement>('button', { name: 'Volgend nummer' }).disabled).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: '← Alle artiesten' }));
+    expect(within(player).getByText('Tweede')).toBeDefined();
+    fireEvent.click(within(player).getByRole('button', { name: 'Vorig nummer' }));
+    await waitFor(() => expect(audio.getAttribute('src')).toContain('Eerste.mp3'));
+    fireEvent.ended(audio);
+    await waitFor(() => expect(audio.getAttribute('src')).toContain('Tweede.mp3'));
+    fireEvent.ended(audio);
+    expect(within(player).getByRole('button', { name: 'Afspelen' })).toBeDefined();
+  });
+
+  it('shows stream setup failures and allows retrying', async () => {
+    vi.mocked(prepareAudioStreaming).mockRejectedValueOnce(new Error('Niet beschikbaar'));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      artists: [{ name: 'Artiest', albums: [{
+        name: 'Album', path: 'Album', tags: {},
+        tracks: [{ title: 'Nummer', path: 'Album/track.mp3', tags: {}, status: 'OK', missingTags: [] }],
+      }] }],
+    }))));
+    clickGetMusic();
+    fireEvent.click(await screen.findByRole('button', { name: /Artiest/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Speel Album af' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Afspelen mislukt: Niet beschikbaar');
+    fireEvent.click(screen.getByRole('button', { name: 'Afspelen' }));
+    await waitFor(() => expect(screen.getByRole('complementary', { name: 'Muziekspeler' }).querySelector('audio')?.getAttribute('src')).toContain('track.mp3'));
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('switches albums and disables playback for an album without tracks', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      artists: [{ name: 'Artiest', albums: [
+        ...['Eerste', 'Tweede'].map((name) => ({
+          name, path: name, tags: {},
+          tracks: [{ title: `Nummer ${name}`, path: `${name}/track.mp3`, tags: {}, status: 'OK', missingTags: [] }],
+        })),
+        { name: 'Leeg', path: 'Leeg', tags: {}, tracks: [] },
+      ] }],
+    }))));
+    clickGetMusic();
+    fireEvent.click(await screen.findByRole('button', { name: /Artiest/ }));
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Speel Leeg af' }).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Speel Eerste af' }));
+    const player = screen.getByRole('complementary', { name: 'Muziekspeler' });
+    await waitFor(() => expect(player.querySelector('audio')?.getAttribute('src')).toContain('Eerste%2Ftrack.mp3'));
+    fireEvent.click(screen.getByRole('button', { name: 'Speel Tweede af' }));
+    await waitFor(() => expect(player.querySelector('audio')?.getAttribute('src')).toContain('Tweede%2Ftrack.mp3'));
+    expect(within(player).getByText('Nummer Tweede')).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Speel Eerste af' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Pauzeer Tweede' })).toBeDefined();
+  });
+
+  it('reports an audio loading failure and can restart the track', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      artists: [{ name: 'Artiest', albums: [{
+        name: 'Album', path: 'Album', tags: {},
+        tracks: [{ title: 'Nummer', path: 'Album/track.mp3', tags: {}, status: 'OK', missingTags: [] }],
+      }] }],
+    }))));
+    clickGetMusic();
+    fireEvent.click(await screen.findByRole('button', { name: /Artiest/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Speel Album af' }));
+    const audio = screen.getByRole('complementary', { name: 'Muziekspeler' }).querySelector('audio')!;
+    await waitFor(() => expect(audio.getAttribute('src')).toContain('track.mp3'));
+    fireEvent.error(audio);
+    expect(screen.getByRole('alert').textContent).toContain('de audiostream kon niet worden geladen');
+    expect(screen.getByRole('button', { name: 'Speel Album af' })).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Speel Album af' }));
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+    await waitFor(() => expect(audio.getAttribute('src')).toContain('track.mp3'));
+  });
+
+  it('reports playback permission failures and permits another attempt', async () => {
+    vi.mocked(HTMLMediaElement.prototype.play).mockRejectedValueOnce(new Error('Afspelen niet toegestaan'));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      artists: [{ name: 'Artiest', albums: [{
+        name: 'Album', path: 'Album', tags: {},
+        tracks: [{ title: 'Nummer', path: 'Album/track.mp3', tags: {}, status: 'OK', missingTags: [] }],
+      }] }],
+    }))));
+    clickGetMusic();
+    fireEvent.click(await screen.findByRole('button', { name: /Artiest/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Speel Album af' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Afspelen mislukt: Afspelen niet toegestaan');
+    fireEvent.click(screen.getByRole('button', { name: 'Afspelen' }));
+    await waitFor(() => expect(HTMLMediaElement.prototype.play).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('fetches and displays the cover only when an album with COVER_ART is opened', async () => {
@@ -193,7 +340,7 @@ describe('Raspberry Pi bediening', () => {
     clickGetMusic();
     fireEvent.click(await screen.findByRole('button', { name: /Artiest/ }));
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByRole('button', { name: /Album/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Album/ }));
 
     const image = await screen.findByRole<HTMLImageElement>('img', { name: 'Albumhoes van Album' });
     expect(image.getAttribute('src')).toBe('blob:album-cover');
@@ -203,7 +350,7 @@ describe('Raspberry Pi bediening', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[1][0]).toBe('/api/music/album-art?path=Artiest%2FAlbum%20%26%20meer');
     expect(fetchMock.mock.calls[1][1].headers).toEqual({ Authorization: 'Bearer access-token' });
-    fireEvent.click(screen.getByRole('button', { name: /Album/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Album/ }));
     expect(revokeObjectURL).toHaveBeenCalledExactlyOnceWith('blob:album-cover');
   });
 
@@ -218,7 +365,7 @@ describe('Raspberry Pi bediening', () => {
 
     clickGetMusic();
     fireEvent.click(await screen.findByRole('button', { name: /Artiest/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Album/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Album/ }));
 
     expect((await screen.findByRole('alert')).textContent).toBe(
       'Albumhoes ophalen mislukt: Request mislukt (HTTP 404).',
@@ -243,9 +390,9 @@ describe('Raspberry Pi bediening', () => {
 
     clickGetMusic();
     fireEvent.click(await screen.findByRole('button', { name: /Artiest/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Album/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Album/ }));
     await waitFor(() => expect(finishRequest).toBeDefined());
-    fireEvent.click(screen.getByRole('button', { name: /Album/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Album/ }));
     await act(async () => { finishRequest(new Response('image')); });
 
     expect(createObjectURL).not.toHaveBeenCalled();

@@ -33,6 +33,10 @@ public class MusicService {
         return fileRepository.findAlbumArt(albumPath);
     }
 
+    public Optional<Path> getAudioFile(String trackPath) throws IOException {
+        return fileRepository.findAudioFile(trackPath);
+    }
+
     private AudioTags readTags(Path path) {
         try {
             return tagReader.readTags(path);
