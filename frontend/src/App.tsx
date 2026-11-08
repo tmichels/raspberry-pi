@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import AlbumArt from './AlbumArt';
+import AlbumDetails from './AlbumDetails';
 import { getMusic } from './api';
 import { getUsername, logout } from './auth';
 import type { MusicLibrary } from './api';
@@ -11,8 +11,6 @@ export default function App() {
   const [selectedArtistIndex, setSelectedArtistIndex] = useState<number | null>(null);
   const [selectedAlbumIndex, setSelectedAlbumIndex] = useState<number | null>(null);
   const selectedArtist = selectedArtistIndex === null ? undefined : music?.artists[selectedArtistIndex];
-  const selectedAlbum = selectedAlbumIndex === null ? undefined : selectedArtist?.albums[selectedAlbumIndex];
-  const showTrackNumbers = selectedAlbum?.tracks.every((track) => Object.hasOwn(track.tags, 'TRACK')) ?? false;
 
   async function handleLogout() {
     try {
@@ -55,62 +53,15 @@ export default function App() {
       <p className="status" role="status" aria-live="polite">{status}</p>
       {music && (
         <section className="music-library" aria-label="Muziekbibliotheek">
-          {selectedAlbum && selectedArtist ? (
+          {selectedArtist ? (
             <>
               <button
                 type="button"
                 className="back-button"
-                onClick={() => setSelectedAlbumIndex(null)}
-              >
-                ← Albums van {selectedArtist.name}
-              </button>
-              <div className="album-details">
-                <div className="album-info">
-                  <h2>{selectedAlbum.name}</h2>
-                  <p>{selectedAlbum.tracks.length} nummers</p>
-                  {Object.keys(selectedAlbum.tags).some((key) => key !== 'COVER_ART') && (
-                    <dl className="metadata">
-                      {Object.entries(selectedAlbum.tags).filter(([key]) => key !== 'COVER_ART').map(([key, value]) => (
-                        <div key={key}><dt>{key}</dt><dd>{value}</dd></div>
-                      ))}
-                    </dl>
-                  )}
-                </div>
-                {Object.hasOwn(selectedAlbum.tags, 'COVER_ART') && (
-                  <AlbumArt key={selectedAlbum.path} albumName={selectedAlbum.name} albumPath={selectedAlbum.path} />
-                )}
-              </div>
-              {selectedAlbum.tracks.length > 0 ? (
-                <ol className={`music-list tracks${showTrackNumbers ? ' tracks--numbered' : ''}`}>
-                  {selectedAlbum.tracks.map((track) => (
-                    <li key={track.path}>
-                      {showTrackNumbers && <span className="track-number">{track.tags.TRACK}</span>}
-                      <div className="track-details">
-                        <strong>{track.title}</strong>
-                        {track.status === 'MISSING_TAGS' && (
-                          <span className="track-warning">
-                            Ontbrekende tags: {track.missingTags.join(', ')}
-                          </span>
-                        )}
-                        {Object.keys(track.tags).some((key) => !showTrackNumbers || key !== 'TRACK') && (
-                          <dl className="metadata">
-                            {Object.entries(track.tags).filter(([key]) => !showTrackNumbers || key !== 'TRACK').map(([key, value]) => (
-                              <div key={key}><dt>{key}</dt><dd>{value}</dd></div>
-                            ))}
-                          </dl>
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              ) : <p>Geen nummers gevonden.</p>}
-            </>
-          ) : selectedArtist ? (
-            <>
-              <button
-                type="button"
-                className="back-button"
-                onClick={() => setSelectedArtistIndex(null)}
+                onClick={() => {
+                  setSelectedArtistIndex(null);
+                  setSelectedAlbumIndex(null);
+                }}
               >
                 ← Alle artiesten
               </button>
@@ -123,11 +74,13 @@ export default function App() {
                       <button
                         type="button"
                         className="music-item"
-                        onClick={() => setSelectedAlbumIndex(index)}
+                        aria-expanded={selectedAlbumIndex === index}
+                        onClick={() => setSelectedAlbumIndex(selectedAlbumIndex === index ? null : index)}
                       >
                         <span>{album.name}</span>
                         <span className="item-count">{album.tracks.length} nummers</span>
                       </button>
+                      {selectedAlbumIndex === index && <AlbumDetails album={album} />}
                     </li>
                   ))}
                 </ul>

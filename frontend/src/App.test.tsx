@@ -77,15 +77,16 @@ describe('Raspberry Pi bediening', () => {
     expect(screen.getByRole('button', { name: /Album A/ })).toBeDefined();
 
     fireEvent.click(screen.getByRole('button', { name: /Album A/ }));
-    expect(screen.getByRole('heading', { name: 'Album A' })).toBeDefined();
+    expect(screen.getByRole('button', { name: /Album A/ }).getAttribute('aria-expanded')).toBe('true');
     expect(screen.getByText('Nummer A')).toBeDefined();
     expect(screen.queryByText('Artiest A/Album A/nummer.mp3')).toBeNull();
     expect(screen.getByText('Jazz')).toBeDefined();
     expect(screen.getByText('2024')).toBeDefined();
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole('button', { name: '← Albums van Artiest A' }));
+    fireEvent.click(screen.getByRole('button', { name: /Album A/ }));
     expect(screen.getByRole('button', { name: /Album A/ })).toBeDefined();
+    expect(screen.queryByText('Nummer A')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '← Alle artiesten' }));
     expect(screen.getByRole('button', { name: /Artiest A/ })).toBeDefined();
   });
@@ -114,7 +115,7 @@ describe('Raspberry Pi bediening', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Artiest/ }));
     fireEvent.click(screen.getByRole('button', { name: /Album/ }));
 
-    const list = screen.getByRole('list');
+    const list = screen.getByRole('button', { name: /Album/ }).closest('li')!.querySelector('ol')!;
     const tracks = within(list).getAllByRole('listitem');
     expect(list.classList.contains('tracks--numbered')).toBe(numbered);
     for (const [index, track] of tracks.entries()) {
@@ -133,6 +134,38 @@ describe('Raspberry Pi bediening', () => {
       expect(within(tracks[0]).getByText('2024')).toBeDefined();
       expect(tracks[1].querySelector('.metadata')).toBeNull();
     }
+  });
+
+  it('expands one album below its button and keeps the album list visible', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      artists: [{ name: 'Artiest', albums: ['Eerste', 'Tweede'].map((name) => ({
+        name,
+        path: name,
+        tags: {},
+        tracks: [{ title: `Nummer ${name}`, path: `${name}/track`, status: 'OK', missingTags: [], tags: {} }],
+      })) }],
+    }))));
+
+    clickGetMusic();
+    fireEvent.click(await screen.findByRole('button', { name: /Artiest/ }));
+    const first = screen.getByRole('button', { name: /Eerste/ });
+    const second = screen.getByRole('button', { name: /Tweede/ });
+    expect(first.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(first);
+    expect(first.getAttribute('aria-expanded')).toBe('true');
+    expect(within(first.closest('li')!).getByText('Nummer Eerste')).toBeDefined();
+    expect(second.getAttribute('aria-expanded')).toBe('false');
+
+    fireEvent.click(second);
+    expect(first.getAttribute('aria-expanded')).toBe('false');
+    expect(second.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.queryByText('Nummer Eerste')).toBeNull();
+    expect(within(second.closest('li')!).getByText('Nummer Tweede')).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: '← Alle artiesten' }));
+    fireEvent.click(screen.getByRole('button', { name: /Artiest/ }));
+    expect(screen.getByRole('button', { name: /Tweede/ }).getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByText('Nummer Tweede')).toBeNull();
   });
 
   it('fetches and displays the cover only when an album with COVER_ART is opened', async () => {
@@ -170,7 +203,7 @@ describe('Raspberry Pi bediening', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[1][0]).toBe('/api/music/album-art?path=Artiest%2FAlbum%20%26%20meer');
     expect(fetchMock.mock.calls[1][1].headers).toEqual({ Authorization: 'Bearer access-token' });
-    fireEvent.click(screen.getByRole('button', { name: '← Albums van Artiest' }));
+    fireEvent.click(screen.getByRole('button', { name: /Album/ }));
     expect(revokeObjectURL).toHaveBeenCalledExactlyOnceWith('blob:album-cover');
   });
 
@@ -212,7 +245,7 @@ describe('Raspberry Pi bediening', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Artiest/ }));
     fireEvent.click(screen.getByRole('button', { name: /Album/ }));
     await waitFor(() => expect(finishRequest).toBeDefined());
-    fireEvent.click(screen.getByRole('button', { name: '← Albums van Artiest' }));
+    fireEvent.click(screen.getByRole('button', { name: /Album/ }));
     await act(async () => { finishRequest(new Response('image')); });
 
     expect(createObjectURL).not.toHaveBeenCalled();

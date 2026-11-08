@@ -96,6 +96,10 @@ button:disabled {
   gap: 20px;
 }
 
+.album-content {
+  padding: 12px 16px;
+}
+
 .album-info {
   min-width: 0;
 }
