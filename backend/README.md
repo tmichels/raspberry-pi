@@ -32,3 +32,9 @@ de [root-README](../README.md#applicaties-starten-met-podman-compose).
 Zie [Swagger UI](https://pi.thomasmichels.nl/api/swagger-ui.html) en de gegenereerde [OpenAPI-specificatie](https://pi.thomasmichels.nl/api/v3/api-docs).
 Beide zijn zonder login bereikbaar; voor het uitvoeren van acties is een
 bearer access token nodig via **Authorize**.
+
+`GET /api/music` geeft artiesten met albums en tracks terug. Zowel albums als
+tracks hebben een `path` relatief aan de ingestelde muziekmap. Het albumpad is
+de gemeenschappelijke bovenliggende map van alle tracks, ook bij submappen
+voor meerdere discs. Als alleen de muziekmap zelf gemeenschappelijk is, is
+het albumpad een lege string.

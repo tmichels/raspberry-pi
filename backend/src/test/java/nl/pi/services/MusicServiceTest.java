@@ -56,11 +56,48 @@ class MusicServiceTest {
         var albums = artists.getFirst().albums();
         assertEquals(List.of("Album A", "Album B"), albums.stream().map(Album::name).toList());
         assertEquals(List.of("Second", "First"), albums.getFirst().tracks().stream().map(Track::title).toList());
+        assertEquals("", albums.getFirst().path());
         var track = albums.getFirst().tracks().getLast();
         assertEquals("elsewhere/01.wav", track.path());
         assertEquals(TrackStatus.OK, track.status());
         assertEquals(List.of(), track.missingTags());
         assertEquals("Fourth", artists.getLast().albums().getFirst().tracks().getFirst().title());
+    }
+
+    @Test
+    void returnsTheAlbumDirectoryRelativeToTheMusicDirectory() throws Exception {
+        givenFiles("Artist/Album/01.wav", "Artist/Album/02.wav");
+        givenTags("Artist/Album/01.wav", tags("Artist", "Album", "First"));
+        givenTags("Artist/Album/02.wav", tags("Artist", "Album", "Second"));
+
+        var album = service.getMusic().artists().getFirst().albums().getFirst();
+
+        assertEquals("Artist/Album", album.path());
+    }
+
+    @Test
+    void returnsTheCommonDirectoryAcrossDiscSubdirectories() throws Exception {
+        givenFiles("Artist/Album/CD1/01.wav", "Artist/Album/CD2/02.wav", "Artist/Album/CD3/03.wav");
+        givenTags("Artist/Album/CD1/01.wav", tags("Artist", "Album", "First"));
+        givenTags("Artist/Album/CD2/02.wav", tags("Artist", "Album", "Second"));
+        givenTags("Artist/Album/CD3/03.wav", tags("Artist", "Album", "Third"));
+
+        var album = service.getMusic().artists().getFirst().albums().getFirst();
+
+        assertEquals("Artist/Album", album.path());
+    }
+
+    @Test
+    void returnsTheCommonDirectoryWhenALaterTrackIsOutsideTheAlbumFolder() throws Exception {
+        givenFiles("Artist/Album/CD1/01.wav", "Artist/Album/CD2/02.wav", "Artist/Other/03.wav");
+        givenTags("Artist/Album/CD1/01.wav", tags("Artist", "Album", "First"));
+        givenTags("Artist/Album/CD2/02.wav", tags("Artist", "Album", "Second"));
+        givenTags("Artist/Other/03.wav", tags("Artist", "Album", "Third"));
+
+        var album = service.getMusic().artists().getFirst().albums().getFirst();
+
+        assertEquals("Artist", album.path());
+        assertEquals(List.of("First", "Second", "Third"), album.tracks().stream().map(Track::title).toList());
     }
 
     @Test
@@ -74,6 +111,7 @@ class MusicServiceTest {
 
         assertEquals("Artist", artist.name());
         assertEquals("Onbekend album", album.name());
+        assertEquals("", album.path());
         assertEquals("Title", track.title());
         assertEquals(TrackStatus.MISSING_TAGS, track.status());
         assertEquals(List.of("ALBUM"), track.missingTags());
@@ -90,6 +128,7 @@ class MusicServiceTest {
 
         assertEquals("Onbekende artiest", artist.name());
         assertEquals("Onbekend album", album.name());
+        assertEquals("sub", album.path());
         assertEquals("untagged.wav", track.title());
         assertEquals("sub/untagged.wav", track.path());
         assertEquals(TrackStatus.MISSING_TAGS, track.status());

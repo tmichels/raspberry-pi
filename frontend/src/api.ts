@@ -15,6 +15,7 @@ export type MusicTrack = {
 
 export type MusicAlbum = {
   name: string;
+  path: string;
   tags: Record<string, string>;
   tracks: MusicTrack[];
 };

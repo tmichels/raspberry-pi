@@ -48,13 +48,14 @@ class MusicControllerTest {
                         Map.of("COMMENT", "Nice")),
                 new Track("missing.mp3", "missing.mp3", TrackStatus.MISSING_TAGS, List.of("TITLE"), Map.of()));
         when(musicService.getMusic()).thenReturn(new MusicLibrary(
-                List.of(new Artist("Artist", List.of(new Album("Album", Map.of("GENRE", "Rock"), tracks))))));
+                List.of(new Artist("Artist", List.of(new Album("Album", "Artist/Album", Map.of("GENRE", "Rock"), tracks))))));
 
         mvc.perform(get("/api/music").with(jwt()))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.artists[0].name").value("Artist"))
                 .andExpect(jsonPath("$.artists[0].albums[0].name").value("Album"))
+                .andExpect(jsonPath("$.artists[0].albums[0].path").value("Artist/Album"))
                 .andExpect(jsonPath("$.artists[0].albums[0].tags.GENRE").value("Rock"))
                 .andExpect(jsonPath("$.artists[0].albums[0].tracks[0].title").value("Title"))
                 .andExpect(jsonPath("$.artists[0].albums[0].tracks[0].path").value("track.mp3"))

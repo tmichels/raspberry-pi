@@ -67,6 +67,7 @@ describe('Raspberry Pi bediening', () => {
         name: 'Artiest A',
         albums: [{
           name: 'Album A',
+          path: 'Artiest A/Album A',
           tags: { GENRE: 'Jazz' },
           tracks: [{
             title: 'Nummer A',

@@ -20,6 +20,7 @@ import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Predicate;
 
@@ -48,7 +49,7 @@ public class MusicService {
             album.tracks().add(toTrack(audioFile, tags));
             tagsByAlbum.computeIfAbsent(album, ignored -> new ArrayList<>()).add(tags);
         }
-        artists.forEach(artist -> artist.albums().forEach(album ->
+        artists.forEach(artist -> artist.albums().replaceAll(album ->
                 assignAlbumTags(album, tagsByAlbum.get(album))));
         artists.sort(Comparator.comparing(Artist::name));
         artists.forEach(artist -> artist.albums().sort(Comparator.comparing(Album::name)));
@@ -71,7 +72,7 @@ public class MusicService {
                 .filter(album -> album.name().equals(name))
                 .findFirst()
                 .orElseGet(() -> {
-                    var album = new Album(name, new TreeMap<>(), new ArrayList<>());
+                    var album = new Album(name, "", new TreeMap<>(), new ArrayList<>());
                     artist.albums().add(album);
                     return album;
                 });
@@ -93,7 +94,14 @@ public class MusicService {
         return new Track(title, relativePath(path), status, missingTags, selectTags(tags, key -> !REQUIRED_TAGS.contains(key)));
     }
 
-    private void assignAlbumTags(Album album, List<Map<String, List<String>>> trackTags) {
+    private Album assignAlbumTags(Album album, List<Map<String, List<String>>> trackTags) {
+        var sharedKeys = sharedTagKeys(trackTags);
+        var albumTags = selectTags(trackTags.getFirst(), sharedKeys::contains);
+        assignTrackTags(album.tracks(), trackTags, sharedKeys);
+        return new Album(album.name(), albumPath(album.tracks()), albumTags, album.tracks());
+    }
+
+    private Set<String> sharedTagKeys(List<Map<String, List<String>>> trackTags) {
         var firstTrackTags = trackTags.getFirst();
         var sharedKeys = new HashSet<>(firstTrackTags.keySet());
         sharedKeys.removeIf(REQUIRED_TAGS::contains);
@@ -101,16 +109,31 @@ public class MusicService {
             sharedKeys.removeIf(key -> !tags.containsKey(key)
                     || !tags.get(key).equals(firstTrackTags.get(key)));
         }
-        album.tags().putAll(selectTags(firstTrackTags, sharedKeys::contains));
-        for (int index = 0; index < album.tracks().size(); index++) {
-            var track = album.tracks().get(index);
-            album.tracks().set(index, new Track(
+        return sharedKeys;
+    }
+
+    private void assignTrackTags(
+            List<Track> tracks, List<Map<String, List<String>>> trackTags, Set<String> sharedKeys) {
+        for (int index = 0; index < tracks.size(); index++) {
+            var track = tracks.get(index);
+            tracks.set(index, new Track(
                     track.title(),
                     track.path(),
                     track.status(),
                     track.missingTags(),
                     selectTags(trackTags.get(index), key -> !REQUIRED_TAGS.contains(key) && !sharedKeys.contains(key))));
         }
+    }
+
+    private String albumPath(List<Track> tracks) {
+        var directory = properties.directory().resolve(tracks.getFirst().path()).getParent();
+        for (var track : tracks) {
+            var trackDirectory = properties.directory().resolve(track.path()).getParent();
+            while (!trackDirectory.startsWith(directory)) {
+                directory = directory.getParent();
+            }
+        }
+        return relativePath(directory);
     }
 
     private String relativePath(Path path) {
