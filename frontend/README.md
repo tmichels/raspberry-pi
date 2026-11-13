@@ -33,6 +33,17 @@ De Keycloak-library gebruikt hiervoor de Web Crypto API van de browser.
 Die is alleen beschikbaar in een *secure context*: HTTPS, of HTTP op
 localhost voor lokale ontwikkeling.
 
+## Muziek afspelen
+
+De playknop naast een album speelt de nummers achtereenvolgens af in de
+browser. De speler blijft beschikbaar tijdens het bladeren; pauzeren, naar
+een ander nummer gaan en binnen een nummer zoeken zijn mogelijk. De browser
+moet het audioformaat ondersteunen.
+
+Voor beveiligde audiostreams gebruikt de frontend een serviceworker. Deze
+voegt een zo nodig vernieuwd access token toe aan streamverzoeken, zonder het
+token in de URL te plaatsen. Serviceworkers vereisen HTTPS of localhost.
+
 ## Deployen met Podman Compose
 
 De frontend draait als rootless Compose-service `pi-frontend`. Compose bouwt

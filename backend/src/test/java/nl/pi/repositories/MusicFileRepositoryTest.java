@@ -3,12 +3,16 @@ package nl.pi.repositories;
 import nl.pi.config.MusicProperties;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -65,5 +69,139 @@ class MusicFileRepositoryTest {
         var file = Files.createFile(directory.resolve("file"));
         var notADirectory = new MusicFileRepository(new MusicProperties(file));
         assertThrows(IOException.class, notADirectory::findAudioFiles);
+    }
+
+    @Test
+    void readsAlbumArtFromTheRelativeAlbumDirectory() throws IOException {
+        var artDirectory = Files.createDirectories(directory.resolve("Artist/Album name/albumart_backup"));
+        var bytes = new byte[]{1, 2, 3};
+        Files.write(artDirectory.resolve("cover.jpg"), bytes);
+
+        assertArrayEquals(bytes, repository().findAlbumArt("Artist/Album name").orElseThrow());
+    }
+
+    @Test
+    void acceptsAnEmptyAlbumPathForTheMusicRoot() throws IOException {
+        var artDirectory = Files.createDirectory(directory.resolve("albumart_backup"));
+        var bytes = new byte[]{4, 5};
+        Files.write(artDirectory.resolve("cover.jpg"), bytes);
+
+        assertArrayEquals(bytes, repository().findAlbumArt("").orElseThrow());
+    }
+
+    @Test
+    void returnsEmptyWhenTheAlbumArtIsMissing() throws IOException {
+        assertEquals(Optional.empty(), repository().findAlbumArt("missing"));
+        Files.createDirectories(directory.resolve("Album/albumart_backup"));
+        assertEquals(Optional.empty(), repository().findAlbumArt("Album"));
+    }
+
+    @Test
+    void rejectsAbsoluteAndEscapingAlbumPaths() {
+        assertThrows(InvalidAlbumPathException.class, () -> repository().findAlbumArt("/outside"));
+        assertThrows(InvalidAlbumPathException.class, () -> repository().findAlbumArt("../outside"));
+        assertThrows(InvalidAlbumPathException.class, () -> repository().findAlbumArt("a/../../outside"));
+        assertThrows(InvalidAlbumPathException.class, () -> repository().findAlbumArt("invalid\0path"));
+    }
+
+    @Test
+    void rejectsSymbolicLinksInTheAlbumArtPath() throws IOException {
+        var album = Files.createDirectories(directory.resolve("Album/albumart_backup"));
+        Files.write(album.resolve("cover.jpg"), new byte[]{1});
+        Files.createSymbolicLink(directory.resolve("alias"), directory.resolve("Album"));
+        Files.createDirectories(directory.resolve("Other/albumart_backup"));
+        Files.createSymbolicLink(directory.resolve("Other/albumart_backup/cover.jpg"), album.resolve("cover.jpg"));
+
+        assertThrows(InvalidAlbumPathException.class, () -> repository().findAlbumArt("alias"));
+        assertThrows(InvalidAlbumPathException.class, () -> repository().findAlbumArt("Other"));
+    }
+
+    @Test
+    void rejectsSymbolicLinksOutsideTheMusicDirectory(@TempDir Path outside) throws IOException {
+        var artDirectory = Files.createDirectories(outside.resolve("albumart_backup"));
+        Files.write(artDirectory.resolve("cover.jpg"), new byte[]{1});
+        Files.createSymbolicLink(directory.resolve("external"), outside);
+
+        assertThrows(InvalidAlbumPathException.class, () -> repository().findAlbumArt("external"));
+    }
+
+    @Test
+    void reportsMissingMusicRootAsAnIoFailure() {
+        var missing = new MusicFileRepository(new MusicProperties(directory.resolve("missing")));
+        assertThrows(IOException.class, () -> missing.findAlbumArt("Album"));
+    }
+
+    @Test
+    void resolvesLibraryTrackPathsWithoutReadingTags() throws IOException {
+        var album = Files.createDirectories(directory.resolve("Artist/Album name"));
+        var file = Files.write(album.resolve("track.FLAC"), new byte[]{1, 2});
+
+        assertEquals(Optional.of(file.toRealPath()), repository().findAudioFile("Artist/Album name/track.FLAC"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", " ", "/outside.mp3", "../outside.mp3", "a/../../outside.mp3", "invalid\0.mp3"})
+    void rejectsInvalidTrackPaths(String path) {
+        assertThrows(InvalidTrackPathException.class, () -> repository().findAudioFile(path));
+    }
+
+    @Test
+    void returnsEmptyForPathsNotInTheAudioLibrary() throws IOException {
+        Files.createFile(directory.resolve("cover.jpg"));
+        Files.createDirectory(directory.resolve("folder.mp3"));
+        Files.createFile(directory.resolve("no-extension"));
+        var deep = Files.createDirectories(directory.resolve("1/2/3/4/5"));
+        Files.createFile(deep.resolve("too-deep.mp3"));
+        var reachable = Files.createFile(deep.getParent().resolve("track.mp3"));
+
+        for (var path : List.of("missing.mp3", "cover.jpg", "folder.mp3", ".", "no-extension",
+                "1/2/3/4/5/too-deep.mp3", "cover.jpg/track.mp3")) {
+            assertEquals(Optional.empty(), repository().findAudioFile(path), path);
+        }
+        assertEquals(Optional.of(reachable.toRealPath()), repository().findAudioFile("1/2/3/4/track.mp3"));
+    }
+
+    @Test
+    void rejectsSymbolicTrackFilesAndDirectoriesIncludingBrokenLinks(@TempDir Path outside) throws IOException {
+        var album = Files.createDirectories(directory.resolve("Album"));
+        var track = Files.createFile(album.resolve("track.mp3"));
+        var externalTrack = Files.createFile(outside.resolve("track.mp3"));
+        Files.createSymbolicLink(directory.resolve("alias.mp3"), track);
+        Files.createSymbolicLink(directory.resolve("alias-directory"), album);
+        Files.createSymbolicLink(directory.resolve("external.mp3"), externalTrack);
+        Files.createSymbolicLink(directory.resolve("external-directory"), outside);
+        Files.createSymbolicLink(directory.resolve("broken.mp3"), outside.resolve("missing.mp3"));
+        Files.createSymbolicLink(directory.resolve("broken-directory"), outside.resolve("missing"));
+
+        for (var path : List.of("alias.mp3", "alias-directory/track.mp3", "external.mp3",
+                "external-directory/track.mp3", "broken.mp3", "broken-directory/track.mp3")) {
+            assertThrows(InvalidTrackPathException.class, () -> repository().findAudioFile(path), path);
+        }
+    }
+
+    @Test
+    void allowsASymbolicConfiguredRoot(@TempDir Path outside) throws IOException {
+        var track = Files.createFile(outside.resolve("track.mp3"));
+        var root = Files.createSymbolicLink(directory.resolve("music"), outside);
+        var repository = new MusicFileRepository(new MusicProperties(root));
+
+        assertEquals(Optional.of(track.toRealPath()), repository.findAudioFile("track.mp3"));
+    }
+
+    @Test
+    void doesNotDecodeTrackPathsAgain() throws IOException {
+        var file = Files.createFile(directory.resolve("%2e%2e.mp3"));
+
+        assertEquals(Optional.of(file.toRealPath()), repository().findAudioFile("%2e%2e.mp3"));
+        assertEquals(Optional.empty(), repository().findAudioFile("%2e%2e%2foutside.mp3"));
+    }
+
+    @Test
+    void reportsUnavailableTrackRootsAsIoFailures() throws IOException {
+        var missing = new MusicFileRepository(new MusicProperties(directory.resolve("missing")));
+        assertThrows(IOException.class, () -> missing.findAudioFile("track.mp3"));
+        var file = Files.createFile(directory.resolve("file"));
+        var notADirectory = new MusicFileRepository(new MusicProperties(file));
+        assertThrows(IOException.class, () -> notADirectory.findAudioFile("track.mp3"));
     }
 }

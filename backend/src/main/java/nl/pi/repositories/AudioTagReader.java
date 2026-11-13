@@ -1,5 +1,6 @@
 package nl.pi.repositories;
 
+import nl.pi.services.music.AudioTags;
 import org.jaudiotagger.audio.AudioFileIO;
 import org.jaudiotagger.audio.exceptions.CannotReadException;
 import org.jaudiotagger.audio.exceptions.InvalidAudioFrameException;
@@ -20,31 +21,32 @@ import java.util.TreeMap;
 public class AudioTagReader {
 
     /**
-     * Geeft per tagnaam (naam van {@link FieldKey}) alle niet-lege waarden terug.
+     * Leest audiometadata en behoudt alle niet-lege waarden in hun oorspronkelijke volgorde.
+     * De map en alle waardelijsten zijn immutable vóór overdracht aan {@link AudioTags}.
      *
-     * @throws AudioReadException wanneer het bestand niet gelezen kan worden
+     * @throws AudioReadException wanneer tags niet gelezen kunnen worden
      */
-    public Map<String, List<String>> readTags(Path path) {
+    public AudioTags readTags(Path path) {
         try {
-            return toMap(AudioFileIO.read(path.toFile()).getTag());
+            return new AudioTags(readValuesByName(AudioFileIO.read(path.toFile()).getTag()));
         } catch (IOException | CannotReadException | TagException
                  | ReadOnlyFileException | InvalidAudioFrameException exception) {
             throw new AudioReadException(path, exception);
         }
     }
 
-    private Map<String, List<String>> toMap(Tag tag) {
+    Map<String, List<String>> readValuesByName(Tag tag) {
         if (tag == null) {
             return Map.of();
         }
-        var tags = new TreeMap<String, List<String>>();
+        var valuesByName = new TreeMap<String, List<String>>();
         for (var key : FieldKey.values()) {
             var values = readValues(tag, key);
             if (!values.isEmpty()) {
-                tags.put(key.name(), values);
+                valuesByName.put(key.name(), values);
             }
         }
-        return Map.copyOf(tags);
+        return Map.copyOf(valuesByName);
     }
 
     private List<String> readValues(Tag tag, FieldKey key) {
