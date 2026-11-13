@@ -1,0 +1,15 @@
+[Unit]
+Description=Button listener
+After=multi-user.target
+
+[Service]
+Type=simple
+User=thomas
+SupplementaryGroups=input
+WorkingDirectory=/home/thomas/raspberry-pi/button
+ExecStart=/usr/bin/python3 /home/thomas/raspberry-pi/button/button-listener.py
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
