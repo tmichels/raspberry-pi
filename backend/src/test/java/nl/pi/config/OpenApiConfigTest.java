@@ -46,6 +46,17 @@ class OpenApiConfigTest {
     }
 
     @Test
+    void marksOnlyPlaylistAndStreamAsPublicMusicOperations() throws Exception {
+        mvc.perform(get("/api/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paths['/api/music/stream'].get.security").isEmpty())
+                .andExpect(jsonPath("$.paths['/api/music/playlist'].get.security").isEmpty())
+                .andExpect(jsonPath("$.paths['/api/music'].get.security").doesNotExist())
+                .andExpect(jsonPath("$.paths['/api/music/album-art'].get.security").doesNotExist())
+                .andExpect(jsonPath("$.security[0].bearerAuth").isArray());
+    }
+
+    @Test
     void servesSwaggerUiAndItsConfigurationWithoutAuthentication() throws Exception {
         mvc.perform(get("/api/swagger-ui.html"))
                 .andExpect(status().is3xxRedirection())

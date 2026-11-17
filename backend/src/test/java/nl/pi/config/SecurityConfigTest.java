@@ -117,10 +117,10 @@ class SecurityConfigTest {
     }
 
     @Test
-    void rejectsAudioStreamsWithoutOrWithInvalidBearerToken() throws Exception {
+    void allowsAnonymousAudioButRejectsInvalidBearerTokens() throws Exception {
         mvc.perform(get("/api/music/stream").param("path", "Artist/Album/track.mp3"))
-                .andExpect(status().isUnauthorized())
-                .andExpect(header().string("WWW-Authenticate", startsWith("Bearer")));
+                .andExpect(status().isOk())
+                .andExpect(content().string(AUDIO));
         mvc.perform(get("/api/music/stream").param("path", "Artist/Album/track.mp3")
                         .header("Authorization", "Bearer invalid-token"))
                 .andExpect(status().isUnauthorized())
@@ -129,6 +129,17 @@ class SecurityConfigTest {
                         .header("Authorization", "Bearer " + token(generateKey(), ISSUER, "pi",
                                 Instant.now().plusSeconds(300))))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void protectsAllOtherMusicPathsAndMethods() throws Exception {
+        for (var path : new String[]{"/api/music", "/api/music/album-art", "/api/music/stream/extra",
+                "/api/music/playlist/extra", "/api/music/stream/", "/api/music/playlist/"}) {
+            mvc.perform(get(path)).andExpect(status().isUnauthorized());
+        }
+        for (var path : new String[]{"/api/music/stream", "/api/music/playlist"}) {
+            mvc.perform(post(path)).andExpect(status().isUnauthorized());
+        }
     }
 
     private void streamRange(String bearer, String range, String contentRange, String body) throws Exception {

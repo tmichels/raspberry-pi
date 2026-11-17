@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getAlbumArt } from './api';
+import { albumPlaylistUrl, getAlbumArt } from './api';
 import { getAccessToken } from './auth';
 
 vi.mock('./auth', () => ({
@@ -10,6 +10,16 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   vi.mocked(getAccessToken).mockResolvedValue('access-token');
+});
+
+describe('albumPlaylistUrl', () => {
+  it('encodes the album path without fetching a token or a file', () => {
+    const tokenCalls = vi.mocked(getAccessToken).mock.calls.length;
+    expect(albumPlaylistUrl('Artiest/Album & 100% + café?#')).toBe(
+      '/api/music/playlist?path=Artiest%2FAlbum%20%26%20100%25%20%2B%20caf%C3%A9%3F%23',
+    );
+    expect(vi.mocked(getAccessToken).mock.calls.length).toBe(tokenCalls);
+  });
 });
 
 describe('getAlbumArt', () => {

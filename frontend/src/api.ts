@@ -24,6 +24,10 @@ export type MusicLibrary = {
   artists: MusicArtist[];
 };
 
+export function albumPlaylistUrl(albumPath: string): string {
+  return `/api/music/playlist?path=${encodeURIComponent(albumPath)}`;
+}
+
 async function throwRequestError(response: Response): Promise<never> {
   if (response.status === 401) {
     throw new Error('Toegang geweigerd (HTTP 401). Herlaad de pagina om opnieuw in te loggen.');

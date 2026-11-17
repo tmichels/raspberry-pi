@@ -133,11 +133,15 @@ class MusicStreamTest {
     }
 
     @Test
-    void requiresAuthenticationForFullAndPartialStreams() throws Exception {
+    void allowsAnonymousFullAndPartialStreamsButRejectsAnInvalidToken() throws Exception {
         mvc.perform(get("/api/music/stream").param("path", TRACK_PATH))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isOk())
+                .andExpect(content().string(AUDIO));
         mvc.perform(get("/api/music/stream").param("path", TRACK_PATH).header("Range", "bytes=0-1"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isPartialContent())
+                .andExpect(header().string("Content-Range", "bytes 0-1/10"))
+                .andExpect(content().string("01"));
+        clearInvocations(properties);
         when(jwtDecoder.decode("invalid")).thenThrow(new BadJwtException("Invalid token"));
         mvc.perform(get("/api/music/stream").param("path", TRACK_PATH).header("Authorization", "Bearer invalid"))
                 .andExpect(status().isUnauthorized());

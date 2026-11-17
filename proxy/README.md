@@ -14,6 +14,13 @@ de proxy controleert.
 Nginx stuurt HTTP-verzoeken met status 308 door naar HTTPS. De backend wordt
 via de frontend gebruikt en heeft geen proxyroute.
 
+Voor de absolute stream-URL's in M3U-afspeellijsten geeft de proxy het
+oorspronkelijke adres, protocol en poort door aan de frontend en backend.
+De HTTPS-proxy overschrijft hiervoor de `X-Forwarded-*`-headers en verwijdert
+een eventueel aangeleverde `Forwarded`-header. Houd de frontend en backend
+achter deze vertrouwde proxy zoals in Compose; de backend vertrouwt de
+doorgestuurde adresgegevens.
+
 ## Namen en certificaat
 
 Voer de proxycommando's op de Pi uit. Voer ze vanuit de root van deze

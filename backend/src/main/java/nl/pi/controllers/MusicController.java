@@ -5,11 +5,14 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import lombok.RequiredArgsConstructor;
 import nl.pi.services.music.MusicLibrary;
+import nl.pi.services.music.MusicPlaylistService;
 import nl.pi.services.music.MusicService;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpRange;
 import org.springframework.http.HttpStatus;
@@ -21,8 +24,10 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Locale;
 
@@ -32,6 +37,7 @@ import java.util.Locale;
 public class MusicController {
 
     private final MusicService musicService;
+    private final MusicPlaylistService playlistService;
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Toon alle muziektracks gegroepeerd per artiest en album",
@@ -68,14 +74,51 @@ public class MusicController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
+    @GetMapping(value = "/playlist", produces = "audio/x-mpegurl; charset=UTF-8")
+    @SecurityRequirements
+    @Operation(summary = "Open de bestaande M3U-afspeellijst van een album",
+            description = "Publiek toegankelijk. Behoudt volgorde, duplicaten en EXTINF; "
+                    + "lokale tracks worden absolute HTTP-stream-URL's zonder tokens.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "UTF-8 M3U, inline aangeboden.", content = @Content),
+            @ApiResponse(responseCode = "400", description = "Ongeldig pad, ambigue of ongeldige afspeellijst.",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE)),
+            @ApiResponse(responseCode = "404", description = "Album of M3U ontbreekt.", content = @Content),
+            @ApiResponse(responseCode = "500", description = "Muziekmap kon niet worden gelezen.",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE))
+    })
+    public ResponseEntity<byte[]> playlist(@RequestParam("path") String path) throws IOException {
+        var result = playlistService.getPlaylist(path);
+        if (result.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        var playlist = result.get();
+        var stream = ServletUriComponentsBuilder.fromCurrentContextPath().path("/api/music/stream");
+        var body = new StringBuilder("#EXTM3U\n");
+        for (var entry : playlist.entries()) {
+            if (entry.metadata() != null) {
+                body.append(entry.metadata()).append('\n');
+            }
+            body.append(stream.cloneBuilder().queryParam("path", "{track}")
+                    .encode(StandardCharsets.UTF_8).buildAndExpand(entry.trackPath()).toUriString()).append('\n');
+        }
+        var filename = playlist.filename().replaceAll("[\\p{Cntrl}/\\\\\"]", "_");
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("audio/x-mpegurl; charset=UTF-8"))
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline()
+                        .filename(filename, StandardCharsets.UTF_8).build().toString())
+                .body(body.toString().getBytes(StandardCharsets.UTF_8));
+    }
+
     @GetMapping("/stream")
+    @SecurityRequirements
     @Operation(summary = "Stream een audiotrack",
-            description = "Gebruik het relatieve trackpad uit de muziekbibliotheek. Ondersteunt HTTP byte ranges.")
+            description = "Publiek toegankelijk zonder token. Gebruik het relatieve trackpad uit de "
+                    + "muziekbibliotheek. Ondersteunt HTTP byte ranges.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Volledige audiotrack.", content = @Content),
             @ApiResponse(responseCode = "206", description = "Gevraagde byte range(s).", content = @Content),
             @ApiResponse(responseCode = "400", description = "Trackpad ontbreekt of is ongeldig.", content = @Content),
-            @ApiResponse(responseCode = "401", description = "Access token ontbreekt of is ongeldig.", content = @Content),
             @ApiResponse(responseCode = "404", description = "Audiotrack niet gevonden in de bibliotheek.", content = @Content),
             @ApiResponse(responseCode = "416", description = "Ongeldige of niet beschikbare byte range.", content = @Content),
             @ApiResponse(responseCode = "500", description = "Muziekbestand kon niet worden gelezen.",

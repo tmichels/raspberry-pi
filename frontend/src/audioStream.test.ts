@@ -1,60 +1,46 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getAccessToken } from './auth';
-
-vi.mock('./auth', () => ({
-  getAccessToken: vi.fn().mockResolvedValue('fresh-token'),
-}));
+import { retireAudioStreamWorker } from './audioStream';
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  vi.resetModules();
   vi.clearAllMocks();
 });
 
-describe('beveiligde audiostreams', () => {
-  it('registers once and supplies a fresh token only to its controlling worker', async () => {
-    const channel = new MessageChannel();
-    const controller = channel.port1;
-    const worker = Object.assign(new EventTarget(), {
-      controller,
-      register: vi.fn().mockResolvedValue({}),
-      ready: Promise.resolve({}),
+describe('oude audio-serviceworker opruimen', () => {
+  it('updates only an existing audio worker so the replacement can unregister itself', async () => {
+    const update = vi.fn().mockResolvedValue(undefined);
+    const getRegistration = vi.fn().mockResolvedValue({
+      active: { scriptURL: new URL('/audio-stream-worker.js', window.location.origin).href },
+      update,
     });
-    vi.stubGlobal('navigator', { serviceWorker: worker });
-    const { prepareAudioStreaming, audioStreamUrl } = await import('./audioStream');
+    vi.stubGlobal('navigator', { serviceWorker: { getRegistration } });
 
-    await Promise.all([prepareAudioStreaming(), prepareAudioStreaming()]);
-    expect(worker.register).toHaveBeenCalledOnce();
-    expect(audioStreamUrl('Artiest/Nummer & meer.mp3')).toBe('/api/music/stream?path=Artiest%2FNummer%20%26%20meer.mp3');
-    const port = channel.port2;
-    const postMessage = vi.spyOn(port, 'postMessage');
-    worker.dispatchEvent(new MessageEvent('message', {
-      data: { type: 'audio-access-token' },
-      source: controller,
-      ports: [port],
-    }));
-    await vi.waitFor(() => expect(postMessage).toHaveBeenCalledExactlyOnceWith({ token: 'fresh-token' }));
-    expect(getAccessToken).toHaveBeenCalledOnce();
-    worker.dispatchEvent(new MessageEvent('message', {
-      data: { type: 'audio-access-token' },
-      source: channel.port2,
-      ports: [port],
-    }));
-    expect(getAccessToken).toHaveBeenCalledOnce();
-    vi.mocked(getAccessToken).mockRejectedValueOnce(new Error('Sessie verlopen'));
-    worker.dispatchEvent(new MessageEvent('message', {
-      data: { type: 'audio-access-token' },
-      source: controller,
-      ports: [port],
-    }));
-    await vi.waitFor(() => expect(postMessage).toHaveBeenLastCalledWith({ token: null }));
-    channel.port1.close();
-    channel.port2.close();
+    await retireAudioStreamWorker();
+
+    expect(getRegistration).toHaveBeenCalledOnce();
+    expect(update).toHaveBeenCalledOnce();
   });
 
-  it('reports an unsupported browser', async () => {
+  it('does not register anything for new visitors or modify unrelated workers', async () => {
+    const update = vi.fn();
+    const getRegistration = vi.fn()
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({ active: { scriptURL: 'https://example.test/other-worker.js' }, update });
+    vi.stubGlobal('navigator', { serviceWorker: { getRegistration } });
+
+    await retireAudioStreamWorker();
+    await retireAudioStreamWorker();
+
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('requires no serviceworker support', async () => {
     vi.stubGlobal('navigator', {});
-    const { prepareAudioStreaming } = await import('./audioStream');
-    await expect(prepareAudioStreaming()).rejects.toThrow('Deze browser ondersteunt geen beveiligde audiostreams.');
+    await expect(retireAudioStreamWorker()).resolves.toBeUndefined();
+  });
+
+  it('reports update failures to the caller', async () => {
+    vi.stubGlobal('navigator', { serviceWorker: { getRegistration: vi.fn().mockRejectedValue(new Error('Niet beschikbaar')) } });
+    await expect(retireAudioStreamWorker()).rejects.toThrow('Niet beschikbaar');
   });
 });

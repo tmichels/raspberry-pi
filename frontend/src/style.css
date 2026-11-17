@@ -95,17 +95,28 @@ button:disabled {
 }
 
 .album-row .music-item {
+  box-sizing: border-box;
   min-width: 0;
   flex: 1;
+  flex-wrap: wrap;
+  padding: 12px 24px;
+  color: inherit;
+  text-decoration: none;
+  overflow-wrap: anywhere;
 }
 
 .album-play {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   min-width: 56px;
   padding: 12px;
   border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
   border-radius: 8px;
   background: transparent;
   color: inherit;
+  text-decoration: none;
 }
 
 .album-play:hover {
@@ -168,55 +179,6 @@ button:disabled {
 
 .track-details {
   min-width: 0;
-}
-
-.track-playing strong {
-  color: #b45309;
-}
-
-.audio-player {
-  position: sticky;
-  bottom: 0;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-top: 24px;
-  padding: 16px;
-  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
-  border-radius: 12px;
-  background: Canvas;
-  color: CanvasText;
-}
-
-.audio-player .album-art {
-  width: 64px;
-  flex: none;
-}
-
-.player-content {
-  flex: 1;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.player-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.player-controls button {
-  min-width: 40px;
-  padding: 8px;
-}
-
-.player-controls input {
-  flex: 1;
-  min-width: 0;
-}
-
-.player-controls span {
-  font-variant-numeric: tabular-nums;
 }
 
 .track-warning {
