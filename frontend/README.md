@@ -40,6 +40,13 @@ browser. De speler blijft beschikbaar tijdens het bladeren; pauzeren, naar
 een ander nummer gaan en binnen een nummer zoeken zijn mogelijk. De browser
 moet het audioformaat ondersteunen.
 
+Als de browser Media Session ondersteunt, kan het apparaat de titel, artiest,
+album en eventueel de albumhoes tonen bij de mediabediening. Afspelen,
+pauzeren, naar een ander nummer gaan en zoeken kunnen daar ook worden
+bediend als het apparaat die acties ondersteunt. De beschikbare bediening en
+de weergave van de albumhoes verschillen per browser en apparaat. De muziek
+blijft in de webapp afspelen.
+
 Voor beveiligde audiostreams gebruikt de frontend een serviceworker. Deze
 voegt een zo nodig vernieuwd access token toe aan streamverzoeken, zonder het
 token in de URL te plaatsen. Serviceworkers vereisen HTTPS of localhost.

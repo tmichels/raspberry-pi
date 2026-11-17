@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react';
-import { getAlbumArt } from './api';
+import useAlbumArt from './useAlbumArt';
 
 type AlbumArtProps = {
   albumName: string;
@@ -7,29 +6,15 @@ type AlbumArtProps = {
 };
 
 export default function AlbumArt({ albumName, albumPath }: AlbumArtProps) {
-  const [imageUrl, setImageUrl] = useState<string>();
-  const [error, setError] = useState('');
+  const art = useAlbumArt(albumPath);
+  return <AlbumArtImage albumName={albumName} imageUrl={art?.imageUrl} error={art?.error} />;
+}
 
-  useEffect(() => {
-    let active = true;
-    let objectUrl: string | undefined;
-
-    getAlbumArt(albumPath).then((image) => {
-      if (!active) return;
-      objectUrl = URL.createObjectURL(image);
-      setImageUrl(objectUrl);
-    }).catch((failure: unknown) => {
-      if (active) {
-        setError(`Albumhoes ophalen mislukt: ${failure instanceof Error ? failure.message : String(failure)}`);
-      }
-    });
-
-    return () => {
-      active = false;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [albumPath]);
-
+export function AlbumArtImage({ albumName, imageUrl, error }: {
+  albumName: string;
+  imageUrl?: string;
+  error?: string;
+}) {
   if (error) return <p role="alert">{error}</p>;
   if (!imageUrl) return <p role="status">Albumhoes wordt opgehaald...</p>;
   return <img className="album-art" src={imageUrl} alt={`Albumhoes van ${albumName}`} />;

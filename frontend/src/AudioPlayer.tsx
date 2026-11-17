@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import AlbumArt from './AlbumArt';
+import { AlbumArtImage } from './AlbumArt';
 import { audioStreamUrl, prepareAudioStreaming } from './audioStream';
+import useAlbumArt from './useAlbumArt';
 import type { MusicAlbum } from './api';
 
 export type Playback = {
@@ -33,6 +34,8 @@ export default function AudioPlayer({ playback, onChange }: Props) {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const track = playback.album.tracks[playback.trackIndex];
+  const hasAlbumArt = Object.hasOwn(playback.album.tags, 'COVER_ART');
+  const albumArt = useAlbumArt(hasAlbumArt ? playback.album.path : undefined);
   playingRef.current = playback.playing;
   playbackRef.current = playback;
   onChangeRef.current = onChange;
@@ -95,12 +98,120 @@ export default function AudioPlayer({ playback, onChange }: Props) {
     }
     if (playback.playing) {
       if (audio.ended) audio.currentTime = 0;
-      startPlayback(audio);
+      if (audio.paused) startPlayback(audio);
     } else {
       playRequestRef.current++;
       audio.pause();
     }
   }, [playback.playing]);
+
+  useEffect(() => {
+    if (!('mediaSession' in navigator) || typeof MediaMetadata === 'undefined') return;
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: track.title,
+      artist: playback.artist,
+      album: playback.album.name,
+      artwork: albumArt?.imageUrl ? [{ src: albumArt.imageUrl }] : [],
+    });
+  }, [track.title, track.path, playback.artist, playback.album.name, playback.album.path, albumArt?.imageUrl]);
+
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    const session = navigator.mediaSession;
+    const audio = audioRef.current!;
+
+    function updatePlaybackState() {
+      session.playbackState = audio.paused ? 'paused' : 'playing';
+    }
+
+    function updatePosition() {
+      if (typeof session.setPositionState !== 'function') return;
+      if (!Number.isFinite(audio.duration) || audio.duration <= 0 ||
+          !Number.isFinite(audio.currentTime) || !Number.isFinite(audio.playbackRate) || audio.playbackRate === 0) {
+        session.setPositionState();
+        return;
+      }
+      session.setPositionState({
+        duration: audio.duration,
+        position: Math.max(0, Math.min(audio.currentTime, audio.duration)),
+        playbackRate: audio.playbackRate,
+      });
+    }
+
+    updatePlaybackState();
+    updatePosition();
+    audio.addEventListener('play', updatePlaybackState);
+    audio.addEventListener('pause', updatePlaybackState);
+    for (const event of ['timeupdate', 'durationchange', 'loadedmetadata', 'seeked', 'ratechange', 'emptied']) {
+      audio.addEventListener(event, updatePosition);
+    }
+    return () => {
+      audio.removeEventListener('play', updatePlaybackState);
+      audio.removeEventListener('pause', updatePlaybackState);
+      for (const event of ['timeupdate', 'durationchange', 'loadedmetadata', 'seeked', 'ratechange', 'emptied']) {
+        audio.removeEventListener(event, updatePosition);
+      }
+      session.metadata = null;
+      session.playbackState = 'none';
+      if (typeof session.setPositionState === 'function') session.setPositionState();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    const session = navigator.mediaSession;
+    const registered: MediaSessionAction[] = [];
+
+    function register(action: MediaSessionAction, handler: MediaSessionActionHandler) {
+      try {
+        session.setActionHandler(action, handler);
+        registered.push(action);
+      } catch (error) {
+        if (!(error instanceof TypeError) && !(error instanceof DOMException && error.name === 'NotSupportedError')) throw error;
+      }
+    }
+
+    function seek(time: number) {
+      const audio = audioRef.current!;
+      if (!Number.isFinite(time) || !Number.isFinite(audio.duration) || audio.duration <= 0) return;
+      audio.currentTime = Math.max(0, Math.min(time, audio.duration));
+      setCurrentTime(audio.currentTime);
+    }
+
+    register('play', () => {
+      setError('');
+      const audio = audioRef.current!;
+      if (readyRef.current && audio.paused) {
+        if (audio.ended) audio.currentTime = 0;
+        startPlayback(audio);
+      }
+      onChangeRef.current({ ...playbackRef.current, playing: true });
+    });
+    register('pause', () => onChangeRef.current({ ...playbackRef.current, playing: false }));
+    if (playback.trackIndex > 0) {
+      register('previoustrack', () => {
+        const current = playbackRef.current;
+        if (current.trackIndex > 0) onChangeRef.current({ ...current, trackIndex: current.trackIndex - 1, playing: true });
+      });
+    }
+    if (playback.trackIndex + 1 < playback.album.tracks.length) {
+      register('nexttrack', () => {
+        const current = playbackRef.current;
+        if (current.trackIndex + 1 < current.album.tracks.length) {
+          onChangeRef.current({ ...current, trackIndex: current.trackIndex + 1, playing: true });
+        }
+      });
+    }
+    register('seekto', (details) => {
+      if (details.seekTime !== undefined) seek(details.seekTime);
+    });
+    register('seekbackward', (details) => seek(audioRef.current!.currentTime - (details.seekOffset ?? 10)));
+    register('seekforward', (details) => seek(audioRef.current!.currentTime + (details.seekOffset ?? 10)));
+
+    return () => {
+      for (const action of registered) session.setActionHandler(action, null);
+    };
+  }, [playback.trackIndex, playback.album.tracks.length]);
 
   function moveTrack(index: number) {
     onChange({ ...playback, trackIndex: index, playing: true });
@@ -108,8 +219,8 @@ export default function AudioPlayer({ playback, onChange }: Props) {
 
   return (
     <aside className="audio-player" aria-label="Muziekspeler">
-      {Object.hasOwn(playback.album.tags, 'COVER_ART') && (
-        <AlbumArt key={playback.album.path} albumName={playback.album.name} albumPath={playback.album.path} />
+      {hasAlbumArt && (
+        <AlbumArtImage albumName={playback.album.name} imageUrl={albumArt?.imageUrl} error={albumArt?.error} />
       )}
       <div className="player-content">
         <strong>{track.title}</strong>
