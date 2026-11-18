@@ -3,15 +3,18 @@
 Deze handleiding behandelt alleen TLS-certificaten en Nginx. De applicaties
 en Keycloak worden afzonderlijk ingericht: volg daarvoor de
 [frontend](../frontend/README.md), [backend](../backend/README.md) en
-[Keycloak](../keycloak/README.md)-handleidingen. Start die services voordat je
+[Keycloak](../keycloak/README.md)- en [Navidrome](../navidrome/README.md)-handleidingen. Start die services voordat je
 de proxy controleert.
 
 | HTTPS-adres                       | Nginx-bestemming op de Pi    |
 |-----------------------------------|------------------------------|
 | `https://pi.thomasmichels.nl`     | Frontend op `127.0.0.1:8081` |
 | `https://login.thomasmichels.nl`  | Keycloak op `127.0.0.1:9000` |
+| `https://thomasmichels.nl/muziek/` | Navidrome op `127.0.0.1:4533` |
 
-Nginx stuurt HTTP-verzoeken met status 308 door naar HTTPS. De backend wordt
+Nginx stuurt HTTP-verzoeken met status 308 door naar HTTPS op hetzelfde domein.
+`/muziek` wordt doorgestuurd naar `/muziek/`. Andere paden op
+`thomasmichels.nl` geven bewust 404. De backend wordt
 via de frontend gebruikt en heeft geen proxyroute.
 
 ## Namen en certificaat
@@ -20,7 +23,8 @@ Voer de proxycommando's op de Pi uit. Voer ze vanuit de root van deze
 repository uit, tenzij anders vermeld. Gebruik alleen het lokale netwerk;
 open geen routerpoorten.
 
-Installeer Certbot op de Pi en vraag één certificaat voor beide namen aan:
+Laat alle drie de domeinnamen in je lokale netwerk naar de Pi verwijzen.
+Installeer Certbot op de Pi en vraag één certificaat voor alle drie de namen aan:
 
 ```sh
 sudo apt update
@@ -29,7 +33,8 @@ sudo certbot certonly \
   --manual \
   --preferred-challenges dns \
   -d pi.thomasmichels.nl \
-  -d login.thomasmichels.nl
+  -d login.thomasmichels.nl \
+  -d thomasmichels.nl
 ```
 
 Voeg de door Certbot opgegeven TXT-records toe bij je DNS-provider. Voor deze
@@ -39,12 +44,14 @@ domeinen gebruiken we Cloudflare:
 |--------------------------|--------------------------------------------|
 | `_acme-challenge.login`  | `_acme-challenge.login.thomasmichels.nl`   |
 | `_acme-challenge.pi`     | `_acme-challenge.pi.thomasmichels.nl`      |
+| `_acme-challenge`        | `_acme-challenge.thomasmichels.nl`         |
 
 Bevestig een controle pas in Certbot nadat de waarde publiek zichtbaar is:
 
 ```sh
 dig @1.1.1.1 TXT _acme-challenge.login.thomasmichels.nl +short
 dig @1.1.1.1 TXT _acme-challenge.pi.thomasmichels.nl +short
+dig @1.1.1.1 TXT _acme-challenge.thomasmichels.nl +short
 ```
 
 Controleer na succes met `sudo certbot certificates` waar Certbot het
@@ -95,7 +102,8 @@ map wilt.
 Start de proxy samen met de andere services via de
 [root-README](../README.md#applicaties-starten-met-podman-compose). De service
 gebruikt `network_mode: host`, zodat Nginx de loopbackpoorten van de frontend
-en Keycloak bereikt en het echte client-IP ziet. Er is geen poortpublicatie
+en Keycloak bereikt en het echte client-IP ziet. Navidrome draait als aparte
+stack en moet op `127.0.0.1:4533` bereikbaar zijn. Er is geen poortpublicatie
 nodig.
 
 Als je alleen de proxy wilt controleren of herstarten, gebruik Compose vanuit
@@ -111,14 +119,22 @@ Controleer de configuratie:
 podman-compose run --rm pi-proxy nginx -t
 ```
 
-Ga alleen verder bij `syntax is ok` en `test is successful`. Start of herstart
+Ga alleen verder bij `syntax is ok` en `test is successful`. Start
 de proxy met:
 
 ```sh
 podman-compose up -d pi-proxy
 ```
 
-Controleer vanaf de client of HTTP naar HTTPS wordt doorgestuurd en of beide
+Als de proxy al draait, activeert `up -d` een gewijzigd configuratiebestand
+niet noodzakelijk. Laat Nginx de configuratie expliciet opnieuw inlezen:
+
+```sh
+podman-compose exec pi-proxy nginx -t &&
+podman-compose exec pi-proxy nginx -s reload
+```
+
+Controleer vanaf de client of HTTP naar HTTPS wordt doorgestuurd en of alle
 HTTPS-adressen bereikbaar zijn:
 
 ```sh
@@ -126,11 +142,23 @@ curl -I http://pi.thomasmichels.nl
 curl -I http://login.thomasmichels.nl
 curl -I https://pi.thomasmichels.nl
 curl -I https://login.thomasmichels.nl
+curl -I http://thomasmichels.nl/muziek
+curl -I https://thomasmichels.nl/muziek
+curl -I https://thomasmichels.nl/muziek/
 ```
 
 Voor HTTP verwacht je status 308 en een `Location` met de HTTPS-URL. Gebruik
 geen `-k` (`--insecure`): daarmee slaat curl de certificaatcontrole over.
 Bekijk proxylogs met `podman logs pi-proxy`.
+
+Voor `http://thomasmichels.nl/muziek` verwacht je een redirect naar
+`https://thomasmichels.nl/muziek`, niet naar het subdomein `pi`.
+De HTTPS-route zonder afsluitende slash geeft vervolgens 308 naar `/muziek/`.
+Geeft die route 404, controleer dan met `podman-compose exec pi-proxy nginx -T`
+of de container de HTTPS-server voor `thomasmichels.nl` en de
+`location = /muziek` bevat. Herlaad daarna Nginx zoals hierboven.
+Een eerder ontvangen 308 kan in de browser gecachet zijn; open dan direct
+`https://thomasmichels.nl/muziek/`.
 
 ## Onderhoud
 
