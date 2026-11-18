@@ -31,7 +31,6 @@ services:
       - PI_COMMANDS_DIRECTORY=/data
     volumes:
       - pi-backend-data:/data
-      - ${MUSIC_DIRECTORY:-/home/thomas/muziek}:/home/thomas/muziek:ro
     networks:
       - pi-app
 

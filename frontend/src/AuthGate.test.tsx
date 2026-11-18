@@ -4,7 +4,7 @@ import AuthGate from './AuthGate';
 import { initializeAuth } from './auth';
 
 vi.mock('./auth', () => ({ initializeAuth: vi.fn() }));
-vi.mock('./App', () => ({ default: () => <button>Muziek ophalen</button> }));
+vi.mock('./App', () => ({ default: () => <button>Uitloggen</button> }));
 
 afterEach(() => {
   cleanup();

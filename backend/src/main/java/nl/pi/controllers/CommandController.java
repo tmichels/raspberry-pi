@@ -35,8 +35,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class CommandController {
 
     private static final String TOUCH_COMMAND = "touch \"$(date \"+%F %T\")\"";
-    private static final String MUSIC_DIRECTORIES_COMMAND =
-            "find /home/thomas/muziek/ -mindepth 2 -type d -printf '%P\\n'";
 
     private final CommandService commandService;
 
@@ -47,14 +45,5 @@ public class CommandController {
                     schema = @Schema(type = "object"), examples = @ExampleObject(value = "{}"))))
     public CommandResult touch() {
         return commandService.execute(TOUCH_COMMAND);
-    }
-
-    @PostMapping(value = "/music-directories", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @Operation(summary = "Toon muziekmappen vanaf twee niveaus onder de bibliotheek",
-            description = "Mapnamen zijn relatief aan /home/thomas/muziek/ en gescheiden door regeleinden.",
-            requestBody = @RequestBody(content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
-                    schema = @Schema(type = "object"), examples = @ExampleObject(value = "{}"))))
-    public CommandResult musicDirectories() {
-        return commandService.execute(MUSIC_DIRECTORIES_COMMAND);
     }
 }
