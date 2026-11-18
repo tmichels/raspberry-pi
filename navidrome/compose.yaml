@@ -1,0 +1,14 @@
+services:
+  navidrome:
+    image: docker.io/navidrome/navidrome:latest
+    restart: unless-stopped
+    ports:
+      - "${NAVIDROME_BIND_IP:?Stel NAVIDROME_BIND_IP in op het lokale IPv4-adres van de Pi}:4533:4533"
+    environment:
+      ND_ENABLESHARING: "false"
+    volumes:
+      - navidrome-data:/data
+      - "${MUSIC_DIRECTORY:?Stel MUSIC_DIRECTORY in op het absolute pad naar je muziekmap}:/music:ro"
+
+volumes:
+  navidrome-data:
