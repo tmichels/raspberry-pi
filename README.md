@@ -12,6 +12,7 @@ Keycloak-authenticatie en een Nginx HTTPS-proxy.
 - [Keycloak](keycloak/README.md) — de realm/client
   configureren.
 - [HTTPS-proxy](proxy/README.md) — certificaten en Nginx op de Pi.
+- [Mopidy](mopidy/README.md) — lokale muziek afspelen via de HiFiBerry.
 
 ## Waar te beginnen
 
