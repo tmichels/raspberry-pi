@@ -16,10 +16,40 @@ Keycloak-authenticatie en een Nginx HTTPS-proxy.
 
 ## Waar te beginnen
 
-Voor gebruik op de Pi: voer eerst de eenmalige proxy-inrichting uit volgens de
+Voor gebruik op de Pi: stel bij een Raspberry Pi 5 met Argon ONE V3 eerst de
+[voeding](#voeding-voor-de-raspberry-pi-5-met-argon-one-v3) in. Voer de
+eenmalige proxy-inrichting uit volgens de
 [proxyhandleiding](proxy/README.md#rootless-inrichten) en configureer de
 Keycloak-realm en client volgens de [Keycloak-handleiding](keycloak/README.md).
 Start daarna de services met Compose.
+
+## Voeding voor de Raspberry Pi 5 met Argon ONE V3
+
+Zet beide instellingen om deze melding te voorkomen:
+
+```text
+This power supply is not capable of supplying 5A; power to peripherals
+will be restricted
+```
+
+Zet onder `[all]` in `/boot/firmware/config.txt`:
+
+```ini
+usb_max_current_enable=1
+```
+
+Voeg `PSU_MAX_CURRENT=5000` toe aan de EEPROM-configuratie met:
+
+```sh
+sudo EDITOR=nano rpi-eeprom-config --edit
+```
+
+Herstart daarna de Pi. `PSU_MAX_CURRENT=5000` laat de Pi 5 A aannemen; gebruik
+dit alleen met een voedingspad dat daadwerkelijk 5 A kan leveren.
+Je kunt dit controleren met dit commando (die moet 5000 teruggeven):
+```sh
+od -An -t u4 --endian=big /proc/device-tree/chosen/power/max_current
+```
 
 ## Applicaties starten met Podman Compose
 
