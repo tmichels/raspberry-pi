@@ -50,6 +50,9 @@ media_dir = /home/thomas/muziek
 [http]
 hostname = 0.0.0.0
 
+[mobile]
+ws_url = wss://thomasmichels.nl/denon/mopidy/ws/
+
 [audio]
 output = alsasink device=plughw:sndrpihifiberry,0
 ```
@@ -80,8 +83,8 @@ Herhaal `sudo mopidyctl local scan` na het toevoegen of verwijderen van muziek.
 
 ## Bedienen
 
-Open `http://192.168.178.96:6680/mobile/` op het lokale netwerk. Is het
-IP-adres gewijzigd, bekijk het dan met `hostname -I`.
+Open `https://thomasmichels.nl/denon` om Mopidy-Mobile via de HTTPS-proxy te
+gebruiken.
 
 Kies **Library → Local media → Tracks** en tik op een nummer.
 
